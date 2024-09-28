@@ -46,18 +46,21 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void registerDefaultCommands() {
-        registerCommand("/start", "Начало работы с ботом", (chatId, builder) ->
-                sendMsg(chatId, "Доброго времени суток! Используйте /help для списка команд."));
+        registerCommand("/start", "Начало работы с ботом", (chatId, builder) -> {
+            builder.append("Доброго времени суток! Используйте /help для списка команд.");
+        });
 
-        registerCommand("/authors", "Информация об авторах", (chatId, builder) ->
-                sendMsg(chatId, "Бот был разработан командой гениев: Богдан Богатырев и Максим Наторин"));
+        registerCommand("/authors", "Информация об авторах", (chatId, builder) -> {
+            builder.append("Бот был разработан командой гениев: Богдан Богатырев и Максим Наторин");
+        });
 
-        registerCommand("/help", "Список команд", (chatId, builder) ->
-                sendMsg(chatId, "Доступные команды:\n" + builder.toString()));
+        registerCommand("/help", "Список команд", (chatId, builder) -> {
+            builder.append("Доступные команды:\n").append(helpText.toString());
+        });
 
-        registerCommand("/info", "Информация о боте", (chatId, builder) ->
-                sendMsg(chatId, "Бот для фитнеса и здоровья: \n" +
-                        "Этот бот поможет пользователям следить за своим здоровьем, предлагать тренировки, рецепты и советы по питанию."));
+        registerCommand("/info", "Информация о боте", (chatId, builder) -> {
+            builder.append("Бот для фитнеса и здоровья: \nЭтот бот поможет пользователям следить за своим здоровьем, предлагать тренировки, рецепты и советы по питанию.");
+        });
     }
 
     @Override
@@ -77,9 +80,16 @@ public class TelegramBot extends TelegramLongPollingBot {
             String text = message.getText();
             String chatId = message.getChatId().toString();
 
-            // если команда E --> она выполняется
-            BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(text, (id, builder) -> sendMsg(id, "Неизвестная команда. Используйте /help для списка команд."));
-            action.accept(chatId, helpText);
+            // Выполняем команду
+            BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(text, (id, builder) -> {
+                builder.append("Неизвестная команда. Используйте /help для списка команд.");
+            });
+
+            StringBuilder responseBuilder = new StringBuilder();
+            action.accept(chatId, responseBuilder);
+
+            // Отправка сообщения пользователю
+            sendMsg(chatId, responseBuilder.toString());
         }
     }
 
@@ -93,5 +103,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         } catch (TelegramApiException e) {
             e.printStackTrace();
         }
+    }
+
+    public Map<String, BiConsumer<String, StringBuilder>> getCommandMap() {
+        return commandMap;
     }
 }
