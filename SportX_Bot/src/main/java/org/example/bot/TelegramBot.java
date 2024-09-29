@@ -14,6 +14,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.BiConsumer;
 
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
+
 public class TelegramBot extends TelegramLongPollingBot {
 
     private String botUsername;
@@ -22,6 +26,29 @@ public class TelegramBot extends TelegramLongPollingBot {
     // таблица команд: ключ - команда, значение - реализация команды
     private final Map<String, BiConsumer<String, StringBuilder>> commandMap = new HashMap<>();
     private final StringBuilder helpText = new StringBuilder();
+
+    private DatabaseManager databaseManager = new DatabaseManager();
+
+    // Карта для хранения состояний пользователей
+    private Map<Long, UserState> userStates = new HashMap<>();
+    // Карта для временного хранения данных профиля пользователей
+    private Map<Long, UserProfile> userProfiles = new HashMap<>();
+
+    private enum UserState {
+        ENTER_NICKNAME,
+        ENTER_AGE,
+        ENTER_HEIGHT,
+        ENTER_WEIGHT,
+        COMPLETED
+    }
+
+    // Временный класс для хранения данных профиля пользователя
+    private class UserProfile {
+        String nickname;
+        int age;
+        int height;
+        int weight;
+    }
 
     public TelegramBot() {
         loadConfig();
@@ -61,6 +88,11 @@ public class TelegramBot extends TelegramLongPollingBot {
         registerCommand("/info", "Информация о боте", (chatId, builder) -> {
             builder.append("Бот для фитнеса и здоровья: \nЭтот бот поможет пользователям следить за своим здоровьем, предлагать тренировки, рецепты и советы по питанию.");
         });
+        registerCommand("/createprofile", "Создать профиль", (chatId, builder) -> {
+            builder.append("Пожалуйста, введите ваш никнейм:");
+            userStates.put(Long.parseLong(chatId), UserState.ENTER_NICKNAME);
+            userProfiles.put(Long.parseLong(chatId), new UserProfile()); // Создаем пустой профиль для пользователя
+        });
     }
 
     @Override
@@ -79,17 +111,78 @@ public class TelegramBot extends TelegramLongPollingBot {
             Message message = update.getMessage();
             String text = message.getText();
             String chatId = message.getChatId().toString();
+            long userId = message.getChatId();
 
-            // Выполняем команду
-            BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(text, (id, builder) -> {
-                builder.append("Неизвестная команда. Используйте /help для списка команд.");
-            });
+            // Проверяем, находится ли пользователь в процессе создания профиля
+            if (userStates.containsKey(userId)) {
+                handleProfileCreation(userId, text, chatId);
+            } else {
+                // Выполняем команду
+                BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(text, (id, builder) -> {
+                    builder.append("Неизвестная команда. Используйте /help для списка команд.");
+                });
 
-            StringBuilder responseBuilder = new StringBuilder();
-            action.accept(chatId, responseBuilder);
+                StringBuilder responseBuilder = new StringBuilder();
+                action.accept(chatId, responseBuilder);
+                sendMsg(chatId, responseBuilder.toString());
+            }
+        }
+    }
 
-            // Отправка сообщения пользователю
-            sendMsg(chatId, responseBuilder.toString());
+    private void handleProfileCreation(long userId, String text, String chatId) {
+        try {
+            UserState state = userStates.get(userId);
+            UserProfile profile = userProfiles.get(userId); // Получаем профиль пользователя
+            switch (state) {
+                case ENTER_NICKNAME:
+                    profile.nickname = text; // Сохраняем никнейм
+                    sendMsg(chatId, "Введите ваш возраст:");
+                    userStates.put(userId, UserState.ENTER_AGE);
+                    break;
+                case ENTER_AGE:
+                    try {
+                        profile.age = Integer.parseInt(text); // Сохраняем возраст
+                        sendMsg(chatId, "Введите ваш рост (в см):");
+                        userStates.put(userId, UserState.ENTER_HEIGHT);
+                    } catch (NumberFormatException e) {
+                        sendMsg(chatId, "Пожалуйста, введите корректный возраст.");
+                    }
+                    break;
+                case ENTER_HEIGHT:
+                    try {
+                        profile.height = Integer.parseInt(text); // Сохраняем рост
+                        sendMsg(chatId, "Введите ваш вес (в кг):");
+                        userStates.put(userId, UserState.ENTER_WEIGHT);
+                    } catch (NumberFormatException e) {
+                        sendMsg(chatId, "Пожалуйста, введите корректный рост.");
+                    }
+                    break;
+                case ENTER_WEIGHT:
+                    try {
+                        profile.weight = Integer.parseInt(text); // Сохраняем вес
+                        sendMsg(chatId, "Ваш профиль успешно создан!");
+                        userStates.put(userId, UserState.COMPLETED);
+
+                        // Сохранение данных профиля в базу данных
+                        databaseManager.connect();
+                        databaseManager.createUserProfile(userId, profile.nickname, profile.age, profile.height, profile.weight);
+                        databaseManager.disconnect();
+
+                        // Очистка данных профиля и состояния пользователя после завершения
+                        userProfiles.remove(userId);
+                        userStates.remove(userId);
+                    } catch (NumberFormatException e) {
+                        sendMsg(chatId, "Пожалуйста, введите корректный вес.");
+                    }
+                    break;
+                default:
+                    sendMsg(chatId, "Процесс создания профиля завершен.");
+                    userStates.remove(userId); // Убираем состояние, когда профиль завершен
+                    break;
+            }
+        } catch (SQLException e) {
+            sendMsg(chatId, "Произошла ошибка при создании профиля. Попробуйте позже.");
+            e.printStackTrace();
         }
     }
 

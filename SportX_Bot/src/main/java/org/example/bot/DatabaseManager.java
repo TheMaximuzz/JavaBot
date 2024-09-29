@@ -25,7 +25,21 @@ public class DatabaseManager {
 
 
     // Добавить методы для выполнения запросов (INSERT, SELECT, UPDATE, DELETE)
+    // Новый метод для создания профиля пользователя
+    public void createUserProfile(long userId, String nickname, int age, int height, int weight) throws SQLException {
+        String query = "INSERT INTO user_profiles (user_id, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?)";
+        insert(query, userId, nickname, age, height, weight);
+    }
 
+    // Проверка, существует ли профиль
+    public boolean isProfileExists(long userId) throws SQLException {
+        String query = "SELECT COUNT(*) FROM user_profiles WHERE user_id = ?";
+        ResultSet resultSet = select(query, userId);
+        if (resultSet.next()) {
+            return resultSet.getInt(1) > 0;
+        }
+        return false;
+    }
 
     // Метод для выполнения INSERT запроса
     public void insert(String query, Object... parameters) throws SQLException {
