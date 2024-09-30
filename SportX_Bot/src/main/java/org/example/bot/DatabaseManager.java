@@ -16,32 +16,30 @@ public class DatabaseManager {
         connection = DriverManager.getConnection(url, username, password);
     }
 
+    //закрываем соединение с бд, если оно установлено
     public void disconnect() throws SQLException {
         if (connection != null && !connection.isClosed()) {
             connection.close();
         }
     }
 
-
-
-    // Добавить методы для выполнения запросов (INSERT, SELECT, UPDATE, DELETE)
-    // Новый метод для создания профиля пользователя
+    // Метод для создания профиля пользователя
     public void createUserProfile(long userId, String nickname, int age, int height, int weight) throws SQLException {
-        String query = "INSERT INTO user_profiles (user_id, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?)";
+        String query = "INSERT INTO user_profiles (user_id, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?)"; //SQL запрос
         insert(query, userId, nickname, age, height, weight);
     }
 
-    // Проверка, существует ли профиль
+    // Проверка, существует ли профиль с определенным userID
     public boolean isProfileExists(long userId) throws SQLException {
         String query = "SELECT COUNT(*) FROM user_profiles WHERE user_id = ?";
         ResultSet resultSet = select(query, userId);
-        if (resultSet.next()) {
+        if (resultSet.next()) { //Если > 0, то профиль существует
             return resultSet.getInt(1) > 0;
         }
         return false;
     }
 
-    // Метод для выполнения INSERT запроса
+    // Метод для выполнения запроса вставления данных
     public void insert(String query, Object... parameters) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(query)) {
             setParameters(statement, parameters);
@@ -49,14 +47,14 @@ public class DatabaseManager {
         }
     }
 
-    // Метод для выполнения SELECT запроса
+    // Метод для выполнения запроса на выборку данных. Возвращает результат в виде ResultSet
     public ResultSet select(String query, Object... parameters) throws SQLException {
         PreparedStatement statement = connection.prepareStatement(query);
         setParameters(statement, parameters);
         return statement.executeQuery();
     }
 
-    // Метод для выполнения UPDATE запроса
+    // Метод для выполнения запроса обновления данных
     public void update(String query, Object... parameters) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(query)) {
             setParameters(statement, parameters);
@@ -72,7 +70,7 @@ public class DatabaseManager {
         }
     }
 
-    // Метод для установки параметров в PreparedStatement
+    // Метод для установки параметров на места плейсхолдеров (пропусков в команде) в SQL запросах
     private void setParameters(PreparedStatement statement, Object... parameters) throws SQLException {
         for (int i = 0; i < parameters.length; i++) {
             statement.setObject(i + 1, parameters[i]);
