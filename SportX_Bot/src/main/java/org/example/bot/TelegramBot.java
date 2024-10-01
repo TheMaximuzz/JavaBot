@@ -97,6 +97,25 @@ public class TelegramBot extends TelegramLongPollingBot {
             userStates.put(Long.parseLong(chatId), UserState.ENTER_NICKNAME);
             userProfiles.put(Long.parseLong(chatId), new UserProfile()); // Создаем пустой профиль для пользователя
         });
+
+        registerCommand("/viewprofile", "Посмотреть данные профиля", (chatId, builder) -> {
+            try {
+                builder.append(databaseManager.getUserProfileAsString(Long.parseLong(chatId)));
+            } catch (SQLException e) {
+                builder.append("Ошибка при получении профиля. Попробуйте позже.");
+                e.printStackTrace();
+            }
+        });
+
+        registerCommand("/deleteprofile", "Удалить профиль", (chatId, builder) -> {
+            try {
+                builder.append(databaseManager.deleteUserProfileAsString(Long.parseLong(chatId)));
+            } catch (SQLException e) {
+                builder.append("Ошибка при удалении профиля. Попробуйте позже.");
+                e.printStackTrace();
+            }
+        });
+
     }
 
     @Override
