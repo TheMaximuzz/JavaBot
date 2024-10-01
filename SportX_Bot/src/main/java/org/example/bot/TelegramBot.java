@@ -162,12 +162,31 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+
+
     private void initializeStateHandlers() {
         stateHandlers.put(UserState.ENTER_NICKNAME, (userId, input) -> {
-            UserProfile profile = userProfiles.get(userId);
-            profile.nickname = input; // Сохраняем никнейм
-            sendMsg(String.valueOf(userId), "Введите ваш возраст:");
-            userStates.put(userId, UserState.ENTER_AGE);  // Переход на следующий этап
+            try {
+                // Подключаемся к базе данных
+                databaseManager.connect();
+
+                // Проверяем, существует ли профиль перед продолжением регистрации
+                if (databaseManager.isProfileExists(userId)) {
+                    sendMsg(String.valueOf(userId), "У вас уже есть профиль. Регистрация отменена.");
+                    userStates.remove(userId); // Прерываем процесс регистрации
+                } else {
+                    UserProfile profile = userProfiles.get(userId);
+                    profile.nickname = input; // Сохраняем никнейм
+                    sendMsg(String.valueOf(userId), "Введите ваш возраст:");
+                    userStates.put(userId, UserState.ENTER_AGE);  // Переход на следующий этап
+                }
+
+                // Отключаемся от базы данных
+                databaseManager.disconnect();
+            } catch (SQLException e) {
+                sendMsg(String.valueOf(userId), "Произошла ошибка при проверке профиля. Попробуйте позже.");
+                e.printStackTrace();
+            }
         });
 
         stateHandlers.put(UserState.ENTER_AGE, (userId, input) -> {

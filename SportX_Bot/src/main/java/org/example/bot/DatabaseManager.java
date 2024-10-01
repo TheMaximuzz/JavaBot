@@ -46,19 +46,33 @@ public class DatabaseManager {
             connection.close();
         }
     }
+    // Метод для создания профиля пользователя с проверкой существования
+    public boolean createUserProfile(long userId, String nickname, int age, int height, int weight) throws SQLException {
+        // Проверяем, существует ли профиль
+        if (isProfileExists(userId)) {
+            return false; // Если профиль существует, возвращаем false
+        }
 
-    // Метод для создания профиля пользователя
-    public void createUserProfile(long userId, String nickname, int age, int height, int weight) throws SQLException {
-        String query = "INSERT INTO user_profiles (user_id, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?)"; //SQL запрос
+        // Если профиль не существует, создаем новый
+        String query = "INSERT INTO user_profiles (user_id, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?)";
         insert(query, userId, nickname, age, height, weight);
+
+        return true; // Профиль создан успешно
     }
+
 
     // Проверка, существует ли профиль с определенным userID
     public boolean isProfileExists(long userId) throws SQLException {
         String query = "SELECT COUNT(*) FROM user_profiles WHERE user_id = ?";
-        ResultSet resultSet = select(query, userId);
-        if (resultSet.next()) { //Если > 0, то профиль существует
-            return resultSet.getInt(1) > 0;
+        connect(); // Подключаемся к базе данных перед выполнением запроса
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setLong(1, userId);
+            ResultSet resultSet = statement.executeQuery();
+            if (resultSet.next()) {
+                return resultSet.getInt(1) > 0; // Если количество больше 0, профиль существует
+            }
+        } finally {
+            disconnect(); // Закрываем соединение в любом случае (успех/ошибка)
         }
         return false;
     }
@@ -147,6 +161,9 @@ public class DatabaseManager {
         disconnect();
         return result;
     }
+
+
+
 
 
 
