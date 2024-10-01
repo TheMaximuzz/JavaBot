@@ -47,18 +47,13 @@ public class DatabaseManager {
         }
     }
     // Метод для создания профиля пользователя с проверкой существования
-    public boolean createUserProfile(long userId, String nickname, int age, int height, int weight) throws SQLException {
-        // Проверяем, существует ли профиль
-        if (isProfileExists(userId)) {
-            return false; // Если профиль существует, возвращаем false
-        }
+    public void createUserProfile(long userId, String nickname, int age, int height, int weight) throws SQLException {
 
-        // Если профиль не существует, создаем новый
-        String query = "INSERT INTO user_profiles (user_id, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?)";
+        String query = "INSERT INTO user_profiles (user_id, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?)"; //SQL запрос
         insert(query, userId, nickname, age, height, weight);
-
-        return true; // Профиль создан успешно
     }
+
+
 
 
     // Проверка, существует ли профиль с определенным userID
@@ -148,17 +143,20 @@ public class DatabaseManager {
     }
     // Метод для удаления профиля пользователя как результат в виде строки
     public String deleteUserProfileAsString(long userId) throws SQLException {
-        connect();
         String result;
 
+        connect();  // Подключаемся для проверки профиля
         if (isProfileExists(userId)) {
+            disconnect();  // Закрываем после проверки
+
+            connect();  // Подключаемся снова для удаления
             deleteUserProfile(userId);
             result = "Ваш профиль успешно удален.";
         } else {
             result = "Профиль не найден.";
         }
+        disconnect();  // Закрываем после удаления или ошибки
 
-        disconnect();
         return result;
     }
 
