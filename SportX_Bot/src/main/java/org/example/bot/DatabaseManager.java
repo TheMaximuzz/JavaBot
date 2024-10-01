@@ -103,6 +103,7 @@ public class DatabaseManager {
         }
     }
 
+
     // Метод для установки параметров на места плейсхолдеров (пропусков в команде) в SQL запросах
     private void setParameters(PreparedStatement statement, Object... parameters) throws SQLException {
         for (int i = 0; i < parameters.length; i++) {
@@ -167,5 +168,3 @@ public class DatabaseManager {
 
 
 }
-
-

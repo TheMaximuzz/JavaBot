@@ -98,6 +98,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             userProfiles.put(Long.parseLong(chatId), new UserProfile()); // Создаем пустой профиль для пользователя
         });
 
+
         registerCommand("/viewprofile", "Посмотреть данные профиля", (chatId, builder) -> {
             try {
                 builder.append(databaseManager.getUserProfileAsString(Long.parseLong(chatId)));
@@ -188,6 +189,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 e.printStackTrace();
             }
         });
+
 
         stateHandlers.put(UserState.ENTER_AGE, (userId, input) -> {
             try {
