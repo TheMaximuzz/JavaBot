@@ -22,15 +22,18 @@ public class TelegramBotTest2 {
             .withPassword("test");
 
     private DatabaseManager databaseManager;
+    private TelegramBot telegramBot;
 
     @BeforeEach
     public void setUp() {
-        // Инициализация DatabaseManager с параметрами контейнера
-        databaseManager = new DatabaseManager(
-                postgreSQLContainer.getJdbcUrl(),
-                postgreSQLContainer.getUsername(),
-                postgreSQLContainer.getPassword()
-        );
+        // Создаем экземпляр TelegramBot
+        telegramBot = new TelegramBot();
+
+        // Инициализация DatabaseManager с экземпляром TelegramBot
+        databaseManager = new DatabaseManager(telegramBot);
+
+        // Переопределяем параметры подключения к базе данных для тестов
+        databaseManager.setDbConfig(postgreSQLContainer.getJdbcUrl(), postgreSQLContainer.getUsername(), postgreSQLContainer.getPassword());
     }
 
     @AfterEach
@@ -70,7 +73,7 @@ public class TelegramBotTest2 {
 
         // Удаляем профиль пользователя
         String deleteMessage = databaseManager.deleteUserProfileAsString(userId);
-        assertEquals("Профиль успешно удалён", deleteMessage);
+        assertEquals("Ваш профиль успешно удален.", deleteMessage);
 
         // Проверяем, что профиль был удалён
         String profile = databaseManager.getUserProfileAsString(userId);

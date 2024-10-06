@@ -42,6 +42,12 @@ public class DatabaseManager {
         }
     }
 
+    public void setDbConfig(String url, String username, String password) {
+        this.url = url;
+        this.username = username;
+        this.password = password;
+    }
+
     public void connect() throws SQLException {
         connection = DriverManager.getConnection(url, username, password);
     }
