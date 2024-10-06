@@ -5,6 +5,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -52,6 +53,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void registerDefaultCommands() {
         registerCommand("/start", "Начало работы с ботом", (chatId, builder) -> {
             builder.append("Доброго времени суток! Используйте /help для списка команд.");
+            sendMsgWithKeyboard(chatId, builder.toString(), KeyboardMarkup.getMainMenuKeyboard());
         });
 
         registerCommand("/authors", "Информация об авторах", (chatId, builder) -> {
@@ -107,11 +109,13 @@ public class TelegramBot extends TelegramLongPollingBot {
             String text = message.getText();
             long userId = message.getChatId();
 
+            String command = KeyboardMarkup.mapButtonTextToCommand(text);
+
             if (databaseManager.getUserState(userId) != null) {
                 databaseManager.handleProfileCreation(userId, text);
             } else {
                 // Выполняем команду
-                BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(text, (id, builder) -> {
+                BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(command, (id, builder) -> {
                     builder.append("Неизвестная команда. Используйте /help для списка команд.");
                 });
 
@@ -127,6 +131,19 @@ public class TelegramBot extends TelegramLongPollingBot {
         SendMessage message = new SendMessage();
         message.setChatId(chatId);
         message.setText(text);
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Метод для отправки сообщений с клавиатурой
+    public void sendMsgWithKeyboard(String chatId, String text, ReplyKeyboardMarkup keyboardMarkup) {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId);
+        message.setText(text);
+        message.setReplyMarkup(keyboardMarkup);
         try {
             execute(message);
         } catch (TelegramApiException e) {
