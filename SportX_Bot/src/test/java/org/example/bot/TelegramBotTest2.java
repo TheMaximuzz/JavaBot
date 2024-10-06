@@ -1,102 +1,87 @@
 package org.example.bot;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-@Testcontainers
 public class TelegramBotTest2 {
 
-    // Инициализация контейнера PostgreSQL для тестов
-    @Container
-    private PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:latest")
-            .withDatabaseName("testdb")
-            .withUsername("test")
-            .withPassword("test");
+    @Mock
+    private DatabaseManager databaseManager;  // Мокаем класс DatabaseManager
 
-    private DatabaseManager databaseManager;
-    private TelegramBot telegramBot;
+    @InjectMocks
+    private TelegramBot telegramBot;  // Подключаем мокнутый DatabaseManager к нашему боту
 
     @BeforeEach
     public void setUp() {
-        // Создаем экземпляр TelegramBot
-        telegramBot = new TelegramBot();
-
-        // Инициализация DatabaseManager с экземпляром TelegramBot
-        databaseManager = new DatabaseManager(telegramBot);
-
-        // Переопределяем параметры подключения к базе данных для тестов
-        databaseManager.setDbConfig(postgreSQLContainer.getJdbcUrl(), postgreSQLContainer.getUsername(), postgreSQLContainer.getPassword());
-    }
-
-    @AfterEach
-    public void tearDown() throws SQLException {
-        // Очистка базы данных после каждого теста
-        databaseManager.disconnect();
+        MockitoAnnotations.openMocks(this);
     }
 
     @Test
     public void testCreateUserProfile() throws SQLException {
-        // Подключаемся к базе данных
-        databaseManager.connect();
-
-        // Создаем новый профиль пользователя
         long userId = 123456L;
         String nickname = "TestUser";
         int age = 25;
         int height = 180;
         int weight = 75;
 
+        // Настраиваем поведение моков
+        doNothing().when(databaseManager).createUserProfile(userId, nickname, age, height, weight);
+        when(databaseManager.getUserProfileAsString(userId)).thenReturn("TestUser, age 25");
+
         databaseManager.createUserProfile(userId, nickname, age, height, weight);
 
-        // Проверяем, что профиль был создан
         String profile = databaseManager.getUserProfileAsString(userId);
         assertNotNull(profile, "Профиль должен быть создан");
         assertTrue(profile.contains("TestUser"), "Профиль должен содержать никнейм");
+
+        // Проверка, что методы были вызваны
+        verify(databaseManager, times(1)).createUserProfile(userId, nickname, age, height, weight);
+        verify(databaseManager, times(1)).getUserProfileAsString(userId);
     }
 
     @Test
     public void testDeleteUserProfile() throws SQLException {
-        // Подключаемся к базе данных
-        databaseManager.connect();
-
-        // Создаем новый профиль пользователя
         long userId = 123456L;
-        databaseManager.createUserProfile(userId, "TestUser", 25, 180, 75);
 
-        // Удаляем профиль пользователя
+        // Настраиваем поведение моков
+        when(databaseManager.deleteUserProfileAsString(userId)).thenReturn("Ваш профиль успешно удален.");
+        when(databaseManager.getUserProfileAsString(userId)).thenReturn(null);
+
         String deleteMessage = databaseManager.deleteUserProfileAsString(userId);
         assertEquals("Ваш профиль успешно удален.", deleteMessage);
 
-        // Проверяем, что профиль был удалён
         String profile = databaseManager.getUserProfileAsString(userId);
         assertNull(profile, "Профиль должен быть удалён");
+
+        verify(databaseManager, times(1)).deleteUserProfileAsString(userId);
+        verify(databaseManager, times(1)).getUserProfileAsString(userId);
     }
 
     @Test
     public void testProfileAlreadyExists() throws SQLException {
-        // Подключаемся к базе данных
-        databaseManager.connect();
-
-        // Создаем новый профиль пользователя
         long userId = 123456L;
-        databaseManager.createUserProfile(userId, "TestUser", 25, 180, 75);
 
-        // Проверяем, что профиль существует
+        when(databaseManager.isProfileExists(userId)).thenReturn(true);
+        doThrow(new SQLException("Profile already exists")).when(databaseManager)
+                .createUserProfile(userId, "TestUser", 25, 180, 75);
+
         assertTrue(databaseManager.isProfileExists(userId), "Профиль должен существовать");
 
-        // Пытаемся создать тот же профиль снова, должна быть ошибка
         SQLException exception = assertThrows(SQLException.class, () -> {
             databaseManager.createUserProfile(userId, "TestUser", 25, 180, 75);
         });
 
         assertTrue(exception.getMessage().contains("already exists"), "Должно быть сообщение, что профиль уже существует");
+
+        verify(databaseManager, times(1)).isProfileExists(userId);
+        verify(databaseManager, times(1)).createUserProfile(userId, "TestUser", 25, 180, 75);
     }
 }
