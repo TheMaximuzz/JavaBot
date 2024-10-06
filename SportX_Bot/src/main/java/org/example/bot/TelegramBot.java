@@ -33,9 +33,10 @@ public class TelegramBot extends TelegramLongPollingBot {
     private Map<Long, UserState> userStates = new HashMap<>();
     // Карта для временного хранения данных профиля пользователей
     private Map<Long, UserProfile> userProfiles = new HashMap<>();
-
     // Карта для обработки состояний регистрации профиля
-    private final Map<UserState, BiConsumer<Long, String>> stateHandlers = new HashMap<>();
+    private Map<UserState, BiConsumer<Long, String>> stateHandlers = new HashMap<>();
+
+
 
     private enum UserState {
         ENTER_NICKNAME,
@@ -46,7 +47,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     // Временный класс для хранения данных профиля пользователя
-    private class UserProfile {
+    class UserProfile {
         String nickname;
         int age;
         int height;
@@ -72,8 +73,8 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     // метод для регистрации команды
     public void registerCommand(String command, String description, BiConsumer<String, StringBuilder> action) {
-        commandMap.put(command, action);
-        helpText.append(command).append(" - ").append(description).append("\n");
+        commandMap.put(command, action); //когда команда будет вызвана, действие будет выполнено.
+        helpText.append(command).append(" - ").append(description).append("\n"); //добавляет команду и её описание в текст справки
     }
 
     private void registerDefaultCommands() {
@@ -151,52 +152,43 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    /*
+    stateHandlers: это карта, которая связывает состояния пользователя с действиями, которые должны быть выполнены на каждом этапе.
+userStates: карта, которая хранит текущее состояние каждого пользователя (например, ждет ввода никнейма, возраста и т.д.).
+userProfiles: временное хранилище для информации профиля пользователя, которая собирается поэтапно.
+databaseManager: объект для работы с базой данных, который используется для подключения, отключения и выполнения запросов.
+     */
+
     private void handleProfileCreation(long userId, String input) {
         UserState state = userStates.get(userId);
         BiConsumer<Long, String> handler = stateHandlers.get(state);
 
         if (handler != null) {
-            handler.accept(userId, input); // Вызов обработчика состояния
+            handler.accept(userId, input);
         } else {
             sendMsg(String.valueOf(userId), "Процесс создания профиля завершен.");
-            userStates.remove(userId); // Очистка состояния, если процесс завершен
+            userStates.remove(userId);
         }
     }
-
-
 
     private void initializeStateHandlers() {
         stateHandlers.put(UserState.ENTER_NICKNAME, (userId, input) -> {
             try {
-                // Подключаемся к базе данных
-                databaseManager.connect();
-
-                // Проверяем, существует ли профиль перед продолжением регистрации
-                if (databaseManager.isProfileExists(userId)) {
-                    sendMsg(String.valueOf(userId), "У вас уже есть профиль. Регистрация отменена.");
-                    userStates.remove(userId); // Прерываем процесс регистрации
-                } else {
-                    UserProfile profile = userProfiles.get(userId);
-                    profile.nickname = input; // Сохраняем никнейм
-                    sendMsg(String.valueOf(userId), "Введите ваш возраст:");
-                    userStates.put(userId, UserState.ENTER_AGE);  // Переход на следующий этап
-                }
-
-                // Отключаемся от базы данных
-                databaseManager.disconnect();
+                databaseManager.handleNickname(userId, input);
+                sendMsg(String.valueOf(userId), "Введите ваш возраст:");
+                userStates.put(userId, UserState.ENTER_AGE);
             } catch (SQLException e) {
-                sendMsg(String.valueOf(userId), "Произошла ошибка при проверке профиля. Попробуйте позже.");
+                sendMsg(String.valueOf(userId), "У вас уже есть профиль. Регистрация отменена.");
+                userStates.remove(userId);
                 e.printStackTrace();
             }
         });
 
-
         stateHandlers.put(UserState.ENTER_AGE, (userId, input) -> {
             try {
-                UserProfile profile = userProfiles.get(userId);
-                profile.age = Integer.parseInt(input); // Сохраняем возраст
+                databaseManager.handleAge(userId, input);
                 sendMsg(String.valueOf(userId), "Введите ваш рост (в см):");
-                userStates.put(userId, UserState.ENTER_HEIGHT);  // Переход на следующий этап
+                userStates.put(userId, UserState.ENTER_HEIGHT);
             } catch (NumberFormatException e) {
                 sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный возраст.");
             }
@@ -204,10 +196,9 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         stateHandlers.put(UserState.ENTER_HEIGHT, (userId, input) -> {
             try {
-                UserProfile profile = userProfiles.get(userId);
-                profile.height = Integer.parseInt(input); // Сохраняем рост
+                databaseManager.handleHeight(userId, input);
                 sendMsg(String.valueOf(userId), "Введите ваш вес (в кг):");
-                userStates.put(userId, UserState.ENTER_WEIGHT);  // Переход на следующий этап
+                userStates.put(userId, UserState.ENTER_WEIGHT);
             } catch (NumberFormatException e) {
                 sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный рост.");
             }
@@ -215,17 +206,8 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         stateHandlers.put(UserState.ENTER_WEIGHT, (userId, input) -> {
             try {
-                UserProfile profile = userProfiles.get(userId);
-                profile.weight = Integer.parseInt(input); // Сохраняем вес
+                databaseManager.handleWeight(userId, input);
                 sendMsg(String.valueOf(userId), "Ваш профиль успешно создан!");
-
-                // Сохраняем профиль в базу данных
-                databaseManager.connect();
-                databaseManager.createUserProfile(userId, profile.nickname, profile.age, profile.height, profile.weight);
-                databaseManager.disconnect();
-
-                // Очищаем данные профиля и состояние пользователя
-                userProfiles.remove(userId);
                 userStates.remove(userId);
             } catch (NumberFormatException e) {
                 sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный вес.");
@@ -235,7 +217,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         });
     }
-
 
     // Метод для отправки сообщений
     private void sendMsg(String chatId, String text) {
@@ -249,6 +230,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+//возвращает карту commandMap, которая содержит команды и связанные с ними действия.
     public Map<String, BiConsumer<String, StringBuilder>> getCommandMap() {
         return commandMap;
     }

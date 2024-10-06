@@ -9,14 +9,17 @@ import java.sql.SQLException;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 public class DatabaseManager {
 
-    private Connection connection;
+    private Connection connection; //объект класса Connection, используется для установки связи с базой данных
     private String url;
     private String username;
     private String password;
+    private Map<Long, UserProfile> userProfiles = new HashMap<>();
 
     public DatabaseManager() {
         loadDbConfig();
@@ -49,11 +52,11 @@ public class DatabaseManager {
     // Метод для создания профиля пользователя с проверкой существования
     public void createUserProfile(long userId, String nickname, int age, int height, int weight) throws SQLException {
 
+        connect();
         String query = "INSERT INTO user_profiles (user_id, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?)"; //SQL запрос
         insert(query, userId, nickname, age, height, weight);
+        disconnect();
     }
-
-
 
 
     // Проверка, существует ли профиль с определенным userID
@@ -72,7 +75,45 @@ public class DatabaseManager {
         return false;
     }
 
-    // Метод для выполнения запроса вставления данных
+    // Методы для обработки процесса создания профиля
+
+    // Метод для обработки никнейма пользователя
+    public void handleNickname(long userId, String input) throws SQLException {
+        if (isProfileExists(userId)) {
+            throw new SQLException("Профиль уже существует");
+        } else {
+            UserProfile profile = getOrCreateUserProfile(userId);
+            profile.nickname = input;
+        }
+    }
+
+    // Метод для обработки возраста пользователя
+    public void handleAge(long userId, String input) throws NumberFormatException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.age = Integer.parseInt(input);
+    }
+
+    // Метод для обработки роста пользователя
+    public void handleHeight(long userId, String input) throws NumberFormatException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.height = Integer.parseInt(input);
+    }
+
+    // Метод для обработки веса пользователя и завершения профиля
+    public void handleWeight(long userId, String input) throws NumberFormatException, SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.weight = Integer.parseInt(input);
+        // Добавляем вызов метода для создания профиля с подключением и отключением базы данных
+        createUserProfile(userId, profile.nickname, profile.age, profile.height, profile.weight);
+
+    }
+
+    // Метод для получения профиля или создания нового
+    private UserProfile getOrCreateUserProfile(long userId) {
+        return userProfiles.computeIfAbsent(userId, k -> new UserProfile());
+    }
+
+    //Выполняет SQL-запрос на вставку данных (INSERT). Используется для вставки любых данных в базу.
     public void insert(String query, Object... parameters) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(query)) {
             setParameters(statement, parameters);
@@ -80,7 +121,7 @@ public class DatabaseManager {
         }
     }
 
-    // Метод для выполнения запроса на выборку данных. Возвращает результат в виде ResultSet
+    // Выполняет SQL-запрос на выборку данных (SELECT) и возвращает результат в виде ResultSet
     public ResultSet select(String query, Object... parameters) throws SQLException {
         PreparedStatement statement = connection.prepareStatement(query);
         setParameters(statement, parameters);
@@ -89,8 +130,9 @@ public class DatabaseManager {
 
     // Метод для выполнения запроса обновления данных
     public void update(String query, Object... parameters) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            setParameters(statement, parameters);
+        try (PreparedStatement statement = connection.prepareStatement(query)) { // метод, который создает объект PreparedStatement для выполнения SQL-запроса.
+            // Аргументом метода является строка query, содержащая SQL-запрос с плейсхолдерами ? вместо реальных значений.
+            setParameters(statement, parameters); //устанавливаем значения на места плейсхолдеров ? в SQL-запросе
             statement.executeUpdate();
         }
     }
@@ -111,7 +153,7 @@ public class DatabaseManager {
         }
     }
 
-    // Метод для получения данных профиля пользователя
+    // Метод для получения данных профиля пользователя. Возвращает данные в виде ResultSet
     public ResultSet getUserProfile(long userId) throws SQLException {
         String query = "SELECT nickname, age, height, weight FROM user_profiles WHERE user_id = ?";
         return select(query, userId);
@@ -160,11 +202,5 @@ public class DatabaseManager {
 
         return result;
     }
-
-
-
-
-
-
 
 }
