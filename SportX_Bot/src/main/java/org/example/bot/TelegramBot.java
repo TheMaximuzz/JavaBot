@@ -15,8 +15,6 @@ import java.util.Properties;
 import java.util.function.BiConsumer;
 
 import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.Map;
 
 public class TelegramBot extends TelegramLongPollingBot {
 
@@ -27,37 +25,11 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final Map<String, BiConsumer<String, StringBuilder>> commandMap = new HashMap<>();
     private final StringBuilder helpText = new StringBuilder();
 
-    private DatabaseManager databaseManager = new DatabaseManager();
-
-    // Карта для хранения состояний пользователей
-    private Map<Long, UserState> userStates = new HashMap<>();
-    // Карта для временного хранения данных профиля пользователей
-    private Map<Long, UserProfile> userProfiles = new HashMap<>();
-    // Карта для обработки состояний регистрации профиля
-    private Map<UserState, BiConsumer<Long, String>> stateHandlers = new HashMap<>();
-
-
-
-    private enum UserState {
-        ENTER_NICKNAME,
-        ENTER_AGE,
-        ENTER_HEIGHT,
-        ENTER_WEIGHT,
-        COMPLETED
-    }
-
-    // Временный класс для хранения данных профиля пользователя
-    class UserProfile {
-        String nickname;
-        int age;
-        int height;
-        int weight;
-    }
+    private DatabaseManager databaseManager = new DatabaseManager(this);
 
     public TelegramBot() {
         loadConfig();
         registerDefaultCommands(); // тут регистрация команд по умолчанию
-        initializeStateHandlers();  // Инициализация хэндлеров состояния
     }
 
     private void loadConfig() {
@@ -95,10 +67,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         });
         registerCommand("/createprofile", "Создать профиль", (chatId, builder) -> {
             builder.append("Пожалуйста, введите ваш никнейм:");
-            userStates.put(Long.parseLong(chatId), UserState.ENTER_NICKNAME);
-            userProfiles.put(Long.parseLong(chatId), new UserProfile()); // Создаем пустой профиль для пользователя
+            databaseManager.setUserState(Long.parseLong(chatId), UserState.ENTER_NICKNAME);
+            databaseManager.addUserProfile(Long.parseLong(chatId), new UserProfile()); // Создаем пустой профиль для пользователя
         });
-
 
         registerCommand("/viewprofile", "Посмотреть данные профиля", (chatId, builder) -> {
             try {
@@ -117,7 +88,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                 e.printStackTrace();
             }
         });
-
     }
 
     @Override
@@ -137,8 +107,8 @@ public class TelegramBot extends TelegramLongPollingBot {
             String text = message.getText();
             long userId = message.getChatId();
 
-            if (userStates.containsKey(userId)) {
-                handleProfileCreation(userId, text);
+            if (databaseManager.getUserState(userId) != null) {
+                databaseManager.handleProfileCreation(userId, text);
             } else {
                 // Выполняем команду
                 BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(text, (id, builder) -> {
@@ -152,74 +122,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    /*
-    stateHandlers: это карта, которая связывает состояния пользователя с действиями, которые должны быть выполнены на каждом этапе.
-userStates: карта, которая хранит текущее состояние каждого пользователя (например, ждет ввода никнейма, возраста и т.д.).
-userProfiles: временное хранилище для информации профиля пользователя, которая собирается поэтапно.
-databaseManager: объект для работы с базой данных, который используется для подключения, отключения и выполнения запросов.
-     */
-
-    private void handleProfileCreation(long userId, String input) {
-        UserState state = userStates.get(userId);
-        BiConsumer<Long, String> handler = stateHandlers.get(state);
-
-        if (handler != null) {
-            handler.accept(userId, input);
-        } else {
-            sendMsg(String.valueOf(userId), "Процесс создания профиля завершен.");
-            userStates.remove(userId);
-        }
-    }
-
-    private void initializeStateHandlers() {
-        stateHandlers.put(UserState.ENTER_NICKNAME, (userId, input) -> {
-            try {
-                databaseManager.handleNickname(userId, input);
-                sendMsg(String.valueOf(userId), "Введите ваш возраст:");
-                userStates.put(userId, UserState.ENTER_AGE);
-            } catch (SQLException e) {
-                sendMsg(String.valueOf(userId), "У вас уже есть профиль. Регистрация отменена.");
-                userStates.remove(userId);
-                e.printStackTrace();
-            }
-        });
-
-        stateHandlers.put(UserState.ENTER_AGE, (userId, input) -> {
-            try {
-                databaseManager.handleAge(userId, input);
-                sendMsg(String.valueOf(userId), "Введите ваш рост (в см):");
-                userStates.put(userId, UserState.ENTER_HEIGHT);
-            } catch (NumberFormatException e) {
-                sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный возраст.");
-            }
-        });
-
-        stateHandlers.put(UserState.ENTER_HEIGHT, (userId, input) -> {
-            try {
-                databaseManager.handleHeight(userId, input);
-                sendMsg(String.valueOf(userId), "Введите ваш вес (в кг):");
-                userStates.put(userId, UserState.ENTER_WEIGHT);
-            } catch (NumberFormatException e) {
-                sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный рост.");
-            }
-        });
-
-        stateHandlers.put(UserState.ENTER_WEIGHT, (userId, input) -> {
-            try {
-                databaseManager.handleWeight(userId, input);
-                sendMsg(String.valueOf(userId), "Ваш профиль успешно создан!");
-                userStates.remove(userId);
-            } catch (NumberFormatException e) {
-                sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный вес.");
-            } catch (SQLException e) {
-                sendMsg(String.valueOf(userId), "Ошибка при сохранении профиля. Попробуйте позже.");
-                e.printStackTrace();
-            }
-        });
-    }
-
     // Метод для отправки сообщений
-    private void sendMsg(String chatId, String text) {
+    public void sendMsg(String chatId, String text) {
         SendMessage message = new SendMessage();
         message.setChatId(chatId);
         message.setText(text);
@@ -230,7 +134,7 @@ databaseManager: объект для работы с базой данных, к
         }
     }
 
-//возвращает карту commandMap, которая содержит команды и связанные с ними действия.
+    //возвращает карту commandMap, которая содержит команды и связанные с ними действия.
     public Map<String, BiConsumer<String, StringBuilder>> getCommandMap() {
         return commandMap;
     }
