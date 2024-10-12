@@ -52,8 +52,8 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void registerDefaultCommands() {
         registerCommand("/start", "Начало работы с ботом", (chatId, builder) -> {
-            builder.append("Доброго времени суток! Используйте /help для списка команд.");
-            sendMsgWithKeyboard(chatId, builder.toString(), KeyboardMarkup.getMainMenuKeyboard());
+            builder.append("Приветствую тебя в нашем фитнес-боте!" + Icon.BICEPS.get() + Icon.TADA.get() + "\nМы поможем тебе похудеть или же набрать мышечную массу! Расскажем все тонкости фитнеса" + Icon.HAT.get());
+            // sendMsgWithKeyboard(chatId, builder.toString(), KeyboardMarkup.getMainMenuKeyboard());
             LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал взаимодействие с ботом.");
         });
 
