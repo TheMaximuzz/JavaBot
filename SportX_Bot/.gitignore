@@ -39,3 +39,4 @@ build/
 
 ### Private information ###
 *.properties
+*.log

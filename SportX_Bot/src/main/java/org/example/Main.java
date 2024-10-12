@@ -1,5 +1,6 @@
 package org.example;
 
+import org.example.bot.LoggerUtil;
 import org.example.bot.TelegramBot;
 import org.example.bot.DatabaseManager;
 import org.example.bot.KeyboardMarkup;
