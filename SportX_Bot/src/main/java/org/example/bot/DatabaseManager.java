@@ -155,7 +155,7 @@ public class DatabaseManager {
         StringBuilder profile = new StringBuilder();
 
         if (resultSet.next()) {
-            profile.append(String.format("Ваш профиль:\nНикнейм: %s\nВозраст: %d\nРост: %d\nВес: %d",
+            profile.append(String.format("<b>Ваш профиль:</b>\n<b>Никнейм:</b> <i>%s</i>\n<b>Возраст:</b> <i>%d</i>\n<b>Рост:</b> <i>%d</i>\n<b>Вес:</b> <i>%d</i>",
                     resultSet.getString("nickname"),
                     resultSet.getInt("age"),
                     resultSet.getInt("height"),
@@ -305,8 +305,7 @@ public class DatabaseManager {
         StringBuilder courses = new StringBuilder();
 
         while (resultSet.next()) {
-            courses.append(String.format("ID: %d, Название: %s, Описание: %s\n",
-                    resultSet.getInt("course_id"),
+            courses.append(String.format("<b>%s</b>\n<b>Описание:</b> <i>%s</i>\n\n",
                     resultSet.getString("course_name"),
                     resultSet.getString("course_description")));
         }
@@ -355,14 +354,39 @@ public class DatabaseManager {
         StringBuilder workouts = new StringBuilder();
 
         while (resultSet.next()) {
-            workouts.append(String.format("ID: %d, Название: %s, Описание: %s\n",
-                    resultSet.getInt("workout_id"),
+            workouts.append(String.format("<b>%s</b>\n<b>Описание:</b> <i>%s</i>\n\n",
                     resultSet.getString("workout_name"),
                     resultSet.getString("workout_description")));
         }
 
         disconnect();
         return workouts.toString();
+    }
+
+    public List<Workout> getWorkouts(long userId) throws SQLException {
+        connect();
+        String query = "SELECT course_id FROM user_profiles WHERE user_id = ?";
+        ResultSet resultSet = select(query, userId);
+        int courseId = 0;
+
+        if (resultSet.next()) {
+            courseId = resultSet.getInt("course_id");
+        }
+
+        query = "SELECT workout_id, workout_name, workout_description FROM workouts WHERE course_id = ?";
+        resultSet = select(query, courseId);
+        List<Workout> workouts = new ArrayList<>();
+
+        while (resultSet.next()) {
+            workouts.add(new Workout(
+                    resultSet.getInt("workout_id"),
+                    resultSet.getString("workout_name"),
+                    resultSet.getString("workout_description")
+            ));
+        }
+
+        disconnect();
+        return workouts;
     }
 
     public String getExercisesAsString(int workoutId) throws SQLException {
@@ -372,8 +396,7 @@ public class DatabaseManager {
         StringBuilder exercises = new StringBuilder();
 
         while (resultSet.next()) {
-            exercises.append(String.format("ID: %d, Название: %s, Повторения: %d, Подходы: %d\n",
-                    resultSet.getInt("exercise_id"),
+            exercises.append(String.format("<b>%s</b>\n<b>Повторения:</b> %d, <b>Подходы:</b> %d\n\n",
                     resultSet.getString("exercise_name"),
                     resultSet.getInt("repetitions"),
                     resultSet.getInt("sets")));

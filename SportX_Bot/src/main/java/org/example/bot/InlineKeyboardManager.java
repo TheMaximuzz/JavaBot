@@ -24,4 +24,22 @@ public class InlineKeyboardManager {
         keyboardMarkup.setKeyboard(keyboardRows);
         return keyboardMarkup;
     }
+
+
+    public static InlineKeyboardMarkup getWorkoutSelectionKeyboard(List<Workout> workouts) {
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboardRows = new ArrayList<>();
+
+        for (Workout workout : workouts) {
+            InlineKeyboardButton button = new InlineKeyboardButton();
+            button.setText(workout.getName());
+            button.setCallbackData("workout_" + workout.getId());
+            List<InlineKeyboardButton> row = new ArrayList<>();
+            row.add(button);
+            keyboardRows.add(row);
+        }
+
+        keyboardMarkup.setKeyboard(keyboardRows);
+        return keyboardMarkup;
+    }
 }
