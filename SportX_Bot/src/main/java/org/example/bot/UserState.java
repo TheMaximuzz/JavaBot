@@ -5,5 +5,7 @@ public enum UserState {
     ENTER_AGE,
     ENTER_HEIGHT,
     ENTER_WEIGHT,
+    SELECT_COURSE,
+    VIEW_EXERCISES,
     COMPLETED
 }

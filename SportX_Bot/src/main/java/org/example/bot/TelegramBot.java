@@ -1,6 +1,5 @@
 package org.example.bot;
 
-// Импортируйте LoggerUtil
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -12,6 +11,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.BiConsumer;
@@ -53,7 +53,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void registerDefaultCommands() {
         registerCommand("/start", "Начало работы с ботом", (chatId, builder) -> {
             builder.append("Приветствую тебя в нашем фитнес-боте!" + Icon.BICEPS.get() + Icon.TADA.get() + "\nМы поможем тебе похудеть или же набрать мышечную массу! Расскажем все тонкости фитнеса" + Icon.HAT.get());
-            // sendMsgWithKeyboard(chatId, builder.toString(), KeyboardMarkup.getMainMenuKeyboard());
+            sendMsgWithKeyboard(chatId, builder.toString(), KeyboardMarkup.getMainMenuKeyboard());
             LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал взаимодействие с ботом.");
         });
 
@@ -97,6 +97,45 @@ public class TelegramBot extends TelegramLongPollingBot {
                 builder.append("Ошибка при удалении профиля. Попробуйте позже.");
                 LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при удалении профиля: " + e.getMessage());
             }
+        });
+
+        registerCommand("/viewcourses", "Посмотреть программы тренировок", (chatId, builder) -> {
+            try {
+                builder.append(databaseManager.getCoursesAsString());
+                LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь просмотрел программы тренировок.");
+            } catch (SQLException e) {
+                builder.append("Ошибка при получении программ тренировок. Попробуйте позже.");
+                LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при получении программ тренировок: " + e.getMessage());
+            }
+        });
+
+        registerCommand("/selectcourse", "Выбрать программу тренировок", (chatId, builder) -> {
+            try {
+                List<Course> courses = databaseManager.getCourses();
+                builder.append(databaseManager.getCoursesAsString());
+                ReplyKeyboardMarkup keyboardMarkup = KeyboardMarkup.getCourseSelectionKeyboard(courses);
+                sendMsgWithKeyboard(chatId, builder.toString(), keyboardMarkup);
+                LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал выбор программы тренировок.");
+            } catch (SQLException e) {
+                builder.append("Ошибка при получении программ тренировок. Попробуйте позже.");
+                LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при получении программ тренировок: " + e.getMessage());
+            }
+        });
+
+        registerCommand("/viewworkouts", "Посмотреть тренировки в выбранной программе", (chatId, builder) -> {
+            try {
+                builder.append(databaseManager.getWorkoutsAsString(Long.parseLong(chatId)));
+                LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь просмотрел тренировки в выбранной программе.");
+            } catch (SQLException e) {
+                builder.append("Ошибка при получении тренировок. Попробуйте позже.");
+                LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при получении тренировок: " + e.getMessage());
+            }
+        });
+
+        registerCommand("/viewexercises", "Посмотреть упражнения в тренировке", (chatId, builder) -> {
+            builder.append("Пожалуйста, введите ID тренировки, чтобы посмотреть упражнения:");
+            databaseManager.setUserState(Long.parseLong(chatId), UserState.VIEW_EXERCISES);
+            LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал просмотр упражнений в тренировке.");
         });
     }
 

@@ -8,7 +8,9 @@ import java.sql.SQLException;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.BiConsumer;
@@ -245,6 +247,35 @@ public class DatabaseManager {
                 e.printStackTrace();
             }
         });
+
+        stateHandlers.put(UserState.SELECT_COURSE, (userId, input) -> {
+            try {
+                int courseId = Integer.parseInt(input);
+                updateUserCourse(userId, courseId);
+                bot.sendMsg(String.valueOf(userId), "Программа тренировок успешно выбрана!");
+                userStates.remove(userId);
+            } catch (NumberFormatException e) {
+                bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный ID программы тренировок.");
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при выборе программы тренировок. Попробуйте позже.");
+                e.printStackTrace();
+            }
+        });
+
+        stateHandlers.put(UserState.VIEW_EXERCISES, (userId, input) -> {
+            try {
+                int workoutId = Integer.parseInt(input);
+                StringBuilder exercises = new StringBuilder();
+                exercises.append(getExercisesAsString(workoutId));
+                bot.sendMsg(String.valueOf(userId), exercises.toString());
+                userStates.remove(userId);
+            } catch (NumberFormatException e) {
+                bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный ID тренировки.");
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при получении упражнений. Попробуйте позже.");
+                e.printStackTrace();
+            }
+        });
     }
 
     public void setUserState(long userId, UserState state) {
@@ -265,5 +296,90 @@ public class DatabaseManager {
 
     public UserProfile getUserProfile(long userId) {
         return userProfiles.get(userId);
+    }
+
+    public String getCoursesAsString() throws SQLException {
+        connect();
+        String query = "SELECT course_id, course_name, course_description FROM courses";
+        ResultSet resultSet = select(query);
+        StringBuilder courses = new StringBuilder();
+
+        while (resultSet.next()) {
+            courses.append(String.format("ID: %d, Название: %s, Описание: %s\n",
+                    resultSet.getInt("course_id"),
+                    resultSet.getString("course_name"),
+                    resultSet.getString("course_description")));
+        }
+
+        disconnect();
+        return courses.toString();
+    }
+
+    public List<Course> getCourses() throws SQLException {
+        connect();
+        String query = "SELECT course_id, course_name, course_description FROM courses";
+        ResultSet resultSet = select(query);
+        List<Course> courses = new ArrayList<>();
+
+        while (resultSet.next()) {
+            courses.add(new Course(
+                    resultSet.getInt("course_id"),
+                    resultSet.getString("course_name"),
+                    resultSet.getString("course_description")
+            ));
+        }
+
+        disconnect();
+        return courses;
+    }
+
+    public void updateUserCourse(long userId, int courseId) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET course_id = ? WHERE user_id = ?";
+        update(query, courseId, userId);
+        disconnect();
+    }
+
+    public String getWorkoutsAsString(long userId) throws SQLException {
+        connect();
+        String query = "SELECT course_id FROM user_profiles WHERE user_id = ?";
+        ResultSet resultSet = select(query, userId);
+        int courseId = 0;
+
+        if (resultSet.next()) {
+            courseId = resultSet.getInt("course_id");
+        }
+
+        query = "SELECT workout_id, workout_name, workout_description FROM workouts WHERE course_id = ?";
+        resultSet = select(query, courseId);
+        StringBuilder workouts = new StringBuilder();
+
+        while (resultSet.next()) {
+            workouts.append(String.format("ID: %d, Название: %s, Описание: %s\n",
+                    resultSet.getInt("workout_id"),
+                    resultSet.getString("workout_name"),
+                    resultSet.getString("workout_description")));
+        }
+
+        disconnect();
+        return workouts.toString();
+    }
+
+    public String getExercisesAsString(int workoutId) throws SQLException {
+        connect();
+        String query = "SELECT exercise_id, exercise_name, repetitions, sets FROM exercises WHERE workout_id = ?";
+        ResultSet resultSet = select(query, workoutId);
+        StringBuilder exercises = new StringBuilder();
+
+        while (resultSet.next()) {
+            exercises.append(String.format("ID: %d, Название: %s, Повторения: %d, Подходы: %d\n",
+                    resultSet.getInt("exercise_id"),
+                    resultSet.getString("exercise_name"),
+                    resultSet.getInt("repetitions"),
+                    resultSet.getInt("sets")));
+        }
+
+        disconnect();
+        return exercises.toString();
     }
 }
