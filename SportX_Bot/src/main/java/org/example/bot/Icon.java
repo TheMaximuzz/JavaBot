@@ -13,7 +13,6 @@ public enum Icon {
     TADA(":tada:"),
     HAT(":mortar_board:");
 
-
     private String value;
 
     public String get() {
@@ -23,4 +22,4 @@ public enum Icon {
     Icon(String value) {
         this.value = value;
     }
-    }
+}

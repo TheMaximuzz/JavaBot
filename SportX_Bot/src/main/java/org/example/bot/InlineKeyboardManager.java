@@ -25,19 +25,33 @@ public class InlineKeyboardManager {
         return keyboardMarkup;
     }
 
-
     public static InlineKeyboardMarkup getWorkoutSelectionKeyboard(List<Workout> workouts) {
         InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboardRows = new ArrayList<>();
 
         for (Workout workout : workouts) {
             InlineKeyboardButton button = new InlineKeyboardButton();
-            button.setText(workout.getName());
+            button.setText(workout.getName() + (workout.isCompleted() ? Icon.CHECK.get() + " " : ""));
             button.setCallbackData("workout_" + workout.getId());
             List<InlineKeyboardButton> row = new ArrayList<>();
             row.add(button);
             keyboardRows.add(row);
         }
+
+        keyboardMarkup.setKeyboard(keyboardRows);
+        return keyboardMarkup;
+    }
+
+    public static InlineKeyboardMarkup getCompleteWorkoutKeyboard(int workoutId) {
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboardRows = new ArrayList<>();
+
+        InlineKeyboardButton completeButton = new InlineKeyboardButton();
+        completeButton.setText(Icon.CHECK.get());
+        completeButton.setCallbackData("complete_" + workoutId);
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(completeButton);
+        keyboardRows.add(row);
 
         keyboardMarkup.setKeyboard(keyboardRows);
         return keyboardMarkup;

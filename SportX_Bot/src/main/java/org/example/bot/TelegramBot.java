@@ -34,7 +34,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     public TelegramBot() {
         loadConfig();
-        registerDefaultCommands(); // регистрация команд по умолчанию
+        registerDefaultCommands();
     }
 
     private void loadConfig() {
@@ -48,7 +48,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    // метод для регистрации команды
     public void registerCommand(String command, String description, BiConsumer<String, StringBuilder> action) {
         commandMap.put(command, action);
         helpText.append(command).append(" - ").append(description).append("\n");
@@ -126,7 +125,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         });
 
-
         registerCommand("/viewworkouts", "Посмотреть тренировки в выбранной программе", (chatId, builder) -> {
             try {
                 String workouts = databaseManager.getWorkoutsAsString(Long.parseLong(chatId));
@@ -139,7 +137,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         });
         registerCommand("/viewexercises", "Посмотреть упражнения в тренировке", (chatId, builder) -> {
             try {
-                List<Workout> workouts = databaseManager.getWorkouts(Long.parseLong(chatId));
+                List<Workout> workouts = databaseManager.getWorkoutsWithCompletionStatus(Long.parseLong(chatId));
                 InlineKeyboardMarkup keyboardMarkup = InlineKeyboardManager.getWorkoutSelectionKeyboard(workouts);
                 sendMsgWithInlineKeyboard(chatId, "Пожалуйста, выберите тренировку:", keyboardMarkup);
                 LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал просмотр упражнений в тренировке.");
@@ -148,7 +146,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                 LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при получении тренировок: " + e.getMessage());
             }
         });
-
     }
 
     @Override
@@ -173,7 +170,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             if (databaseManager.getUserState(userId) != null) {
                 databaseManager.handleProfileCreation(userId, text);
             } else {
-                // Выполняем команду
+
                 BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(command, (id, builder) -> {
                     builder.append("Неизвестная команда. Используйте /help для списка команд.");
                 });
@@ -192,6 +189,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 try {
                     int courseId = Integer.parseInt(callbackData);
                     databaseManager.updateUserCourse(userId, courseId);
+                    databaseManager.resetCompletedWorkouts(userId); // Сброс выполненных тренировок при смене программы
                     sendMsg(String.valueOf(userId), "Курс успешно выбран!");
                     databaseManager.removeUserState(userId); // Удаляем состояние пользователя
                     LoggerUtil.logInfo(userId, "Пользователь выбрал курс.");
@@ -204,15 +202,27 @@ public class TelegramBot extends TelegramLongPollingBot {
                     int workoutId = Integer.parseInt(callbackData.split("_")[1]);
                     StringBuilder exercises = new StringBuilder();
                     exercises.append(databaseManager.getExercisesAsString(workoutId));
-                    sendMsg(String.valueOf(userId), exercises.toString());
+                    InlineKeyboardMarkup keyboardMarkup = InlineKeyboardManager.getCompleteWorkoutKeyboard(workoutId);
+                    sendMsgWithInlineKeyboard(String.valueOf(userId), exercises.toString(), keyboardMarkup);
                     LoggerUtil.logInfo(userId, "Пользователь просмотрел упражнения в тренировке.");
                 } catch (NumberFormatException | SQLException e) {
                     sendMsg(String.valueOf(userId), "Ошибка при получении упражнений. Попробуйте позже.");
                     LoggerUtil.logError(userId, "Ошибка при получении упражнений: " + e.getMessage());
                 }
+            } else if (callbackData.startsWith("complete_")) {
+                try {
+                    int workoutId = Integer.parseInt(callbackData.split("_")[1]);
+                    databaseManager.markWorkoutAsCompleted(userId, workoutId);
+                    sendMsg(String.valueOf(userId), "Тренировка отмечена как выполненная!");
+                    LoggerUtil.logInfo(userId, "Пользователь отметил тренировку как выполненную.");
+                } catch (NumberFormatException | SQLException e) {
+                    sendMsg(String.valueOf(userId), "Ошибка при отметке тренировки. Попробуйте позже.");
+                    LoggerUtil.logError(userId, "Ошибка при отметке тренировки: " + e.getMessage());
+                }
             }
         }
     }
+
 
     // Метод для отправки сообщений
     public void sendMsg(String chatId, String text) {
@@ -240,11 +250,11 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    // Метод для отправки сообщений с инлайн-клавиатурой
     public void sendMsgWithInlineKeyboard(String chatId, String text, InlineKeyboardMarkup keyboardMarkup) {
         SendMessage message = new SendMessage();
         message.setChatId(chatId);
         message.setText(text);
+        message.setParseMode(ParseMode.HTML);
         message.setReplyMarkup(keyboardMarkup);
         try {
             execute(message);

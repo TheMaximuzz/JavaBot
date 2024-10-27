@@ -405,4 +405,59 @@ public class DatabaseManager {
         disconnect();
         return exercises.toString();
     }
+
+    public void markWorkoutAsCompleted(long userId, int workoutId) throws SQLException {
+        connect();
+        String query = "INSERT INTO completed_workouts (user_id, workout_id, completed) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE completed = ?";
+        update(query, userId, workoutId, true, true);
+        disconnect();
+    }
+
+    public boolean isWorkoutCompleted(long userId, int workoutId) throws SQLException {
+        connect();
+        String query = "SELECT completed FROM completed_workouts WHERE user_id = ? AND workout_id = ?";
+        ResultSet resultSet = select(query, userId, workoutId);
+        boolean completed = false;
+        if (resultSet.next()) {
+            completed = resultSet.getBoolean("completed");
+        }
+        disconnect();
+        return completed;
+    }
+
+    public List<Workout> getWorkoutsWithCompletionStatus(long userId) throws SQLException {
+        connect();
+        String query = "SELECT course_id FROM user_profiles WHERE user_id = ?";
+        ResultSet resultSet = select(query, userId);
+        int courseId = 0;
+
+        if (resultSet.next()) {
+            courseId = resultSet.getInt("course_id");
+        }
+
+        query = "SELECT workout_id, workout_name, workout_description FROM workouts WHERE course_id = ?";
+        resultSet = select(query, courseId);
+        List<Workout> workouts = new ArrayList<>();
+
+        while (resultSet.next()) {
+            Workout workout = new Workout(
+                    resultSet.getInt("workout_id"),
+                    resultSet.getString("workout_name"),
+                    resultSet.getString("workout_description")
+            );
+            workout.setCompleted(isWorkoutCompleted(userId, workout.getId()));
+            workouts.add(workout);
+        }
+
+        disconnect();
+        return workouts;
+    }
+
+    public void resetCompletedWorkouts(long userId) throws SQLException {
+        connect();
+        String query = "DELETE FROM completed_workouts WHERE user_id = ?";
+        delete(query, userId);
+        disconnect();
+    }
+
 }
