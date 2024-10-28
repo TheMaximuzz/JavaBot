@@ -460,4 +460,71 @@ public class DatabaseManager {
         disconnect();
     }
 
+    // Метод для получения списка курсов
+    public List<String> getCoursesList() throws SQLException {
+        connect();
+        String query = "SELECT course_name FROM courses";
+        ResultSet resultSet = select(query);
+        List<String> courses = new ArrayList<>();
+
+        while (resultSet.next()) {
+            courses.add(resultSet.getString("course_name"));
+        }
+
+        disconnect();
+        return courses;
+    }
+
+    // Метод для выбора курса
+    public void selectCourse(long userId, int courseId) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET course_id = ? WHERE user_id = ?";
+        update(query, courseId, userId);
+        disconnect();
+    }
+
+    // Метод для получения списка тренировок по courseId
+    public List<String> getWorkoutsList(int courseId) throws SQLException {
+        connect();
+        String query = "SELECT workout_name FROM workouts WHERE course_id = ?";
+        ResultSet resultSet = select(query, courseId);
+        List<String> workouts = new ArrayList<>();
+
+        while (resultSet.next()) {
+            workouts.add(resultSet.getString("workout_name"));
+        }
+
+        disconnect();
+        return workouts;
+    }
+
+    // Метод для получения списка упражнений по workoutId
+    public List<String> getExercisesList(int workoutId) throws SQLException {
+        connect();
+        String query = "SELECT exercise_name FROM exercises WHERE workout_id = ?";
+        ResultSet resultSet = select(query, workoutId);
+        List<String> exercises = new ArrayList<>();
+
+        while (resultSet.next()) {
+            exercises.add(resultSet.getString("exercise_name"));
+        }
+
+        disconnect();
+        return exercises;
+    }
+
+    public int getCourseIdForUser(long userId) throws SQLException {
+        connect();
+        String query = "SELECT course_id FROM user_profiles WHERE user_id = ?";
+        ResultSet resultSet = select(query, userId);
+        int courseId = 0;
+
+        if (resultSet.next()) {
+            courseId = resultSet.getInt("course_id");
+        }
+
+        disconnect();
+        return courseId;
+    }
+
 }

@@ -10,7 +10,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
 
-
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -223,7 +222,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-
     // Метод для отправки сообщений
     public void sendMsg(String chatId, String text) {
         SendMessage message = new SendMessage();
@@ -266,5 +264,68 @@ public class TelegramBot extends TelegramLongPollingBot {
     // возвращает карту commandMap, которая содержит команды и связанные с ними действия.
     public Map<String, BiConsumer<String, StringBuilder>> getCommandMap() {
         return commandMap;
+    }
+
+    // Метод для установки DatabaseManager
+    public void setDatabaseManager(DatabaseManager databaseManager) {
+        this.databaseManager = databaseManager;
+    }
+
+    public String viewCourses(long userId) {
+        StringBuilder responseBuilder = new StringBuilder();
+        try {
+            List<String> coursesList = databaseManager.getCoursesList();
+            for (String course : coursesList) {
+                responseBuilder.append(course).append("\n");
+            }
+        } catch (SQLException e) {
+            responseBuilder.append("Ошибка при получении курсов. Попробуйте позже.");
+            LoggerUtil.logError(userId, "Ошибка при получении курсов: " + e.getMessage());
+        }
+        return responseBuilder.toString();
+    }
+
+    public String selectCourse(long userId, int courseId) {
+        try {
+            databaseManager.selectCourse(userId, courseId);
+            return "Курс выбран успешно";
+        } catch (SQLException e) {
+            LoggerUtil.logError(userId, "Ошибка при выборе курса: " + e.getMessage());
+            return "Ошибка при выборе курса. Попробуйте позже.";
+        }
+    }
+
+    public String viewWorkouts(long userId) {
+        StringBuilder responseBuilder = new StringBuilder();
+        try {
+            // Retrieve the courseId associated with the userId
+            int courseId = databaseManager.getCourseIdForUser(userId);
+            if (courseId == 0) {
+                responseBuilder.append("Пользователь не выбрал курс.");
+            } else {
+                List<String> workoutsList = databaseManager.getWorkoutsList(courseId);
+                for (String workout : workoutsList) {
+                    responseBuilder.append(workout).append("\n");
+                }
+            }
+        } catch (SQLException e) {
+            responseBuilder.append("Ошибка при получении тренировок. Попробуйте позже.");
+            LoggerUtil.logError(userId, "Ошибка при получении тренировок: " + e.getMessage());
+        }
+        return responseBuilder.toString();
+    }
+
+    public String viewExercises(long userId, int workoutId) {
+        StringBuilder responseBuilder = new StringBuilder();
+        try {
+            List<String> exercisesList = databaseManager.getExercisesList(workoutId);
+            for (String exercise : exercisesList) {
+                responseBuilder.append(exercise).append("\n");
+            }
+        } catch (SQLException e) {
+            responseBuilder.append("Ошибка при получении упражнений. Попробуйте позже.");
+            LoggerUtil.logError(userId, "Ошибка при получении упражнений: " + e.getMessage());
+        }
+        return responseBuilder.toString();
     }
 }
