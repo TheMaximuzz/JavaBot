@@ -25,6 +25,8 @@ public class KeyboardMarkup {
         buttonTextToCommandMap.put("/selectcourse", "/selectcourse");
         buttonTextToCommandMap.put("/viewworkouts", "/viewworkouts");
         buttonTextToCommandMap.put("/viewexercises", "/viewexercises");
+        buttonTextToCommandMap.put("/login", "/login");
+        buttonTextToCommandMap.put("/logout", "/logout");
     }
 
     public static ReplyKeyboardMarkup getMainMenuKeyboard() {
@@ -43,17 +45,18 @@ public class KeyboardMarkup {
 
         KeyboardRow row3 = new KeyboardRow();
         row3.add(new KeyboardButton("/createprofile"));
-        row3.add(new KeyboardButton("/viewprofile"));
+        row3.add(new KeyboardButton("/login"));
 
         KeyboardRow row4 = new KeyboardRow();
+        row4.add(new KeyboardButton("/viewprofile"));
         row4.add(new KeyboardButton("/deleteprofile"));
-        row4.add(new KeyboardButton("/viewcourses"));
 
         KeyboardRow row5 = new KeyboardRow();
+        row5.add(new KeyboardButton("/viewcourses"));
         row5.add(new KeyboardButton("/selectcourse"));
-        row5.add(new KeyboardButton("/viewworkouts"));
 
         KeyboardRow row6 = new KeyboardRow();
+        row6.add(new KeyboardButton("/viewworkouts"));
         row6.add(new KeyboardButton("/viewexercises"));
 
         keyboardRows.add(row1);

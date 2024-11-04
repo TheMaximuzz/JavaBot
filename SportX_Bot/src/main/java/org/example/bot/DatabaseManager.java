@@ -60,11 +60,25 @@ public class DatabaseManager {
         }
     }
 
-    public void createUserProfile(long userId, String nickname, int age, int height, int weight) throws SQLException {
+    public void createUserProfile(long userId, String login, String password, String nickname, Integer age, Integer height, Integer weight) throws SQLException {
         connect();
-        String query = "INSERT INTO user_profiles (user_id, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?)";
-        insert(query, userId, nickname, age, height, weight);
+        String query = "INSERT INTO user_profiles (user_id, login, password, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        insert(query, userId, login, password, nickname, age, height, weight);
         disconnect();
+    }
+
+    public boolean isUserLoggedIn(long userId) throws SQLException {
+        connect();
+        String query = "SELECT is_logged_in FROM user_profiles WHERE user_id = ?";
+        ResultSet resultSet = select(query, userId);
+        boolean isLoggedIn = false;
+
+        if (resultSet.next()) {
+            isLoggedIn = resultSet.getBoolean("is_logged_in");
+        }
+
+        disconnect();
+        return isLoggedIn;
     }
 
     public boolean isProfileExists(long userId) throws SQLException {
@@ -82,29 +96,57 @@ public class DatabaseManager {
         return false;
     }
 
-    public void handleNickname(long userId, String input) throws SQLException {
-        if (isProfileExists(userId)) {
-            throw new SQLException("Профиль уже существует");
-        } else {
-            UserProfile profile = getOrCreateUserProfile(userId);
-            profile.nickname = input;
+    public boolean validateLogin(long userId, String login, String password) throws SQLException {
+        String query = "SELECT COUNT(*) FROM user_profiles WHERE user_id = ? AND login = ? AND password = ?";
+        connect();
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setLong(1, userId);
+            statement.setString(2, login);
+            statement.setString(3, password);
+            ResultSet resultSet = statement.executeQuery();
+            if (resultSet.next()) {
+                return resultSet.getInt(1) > 0;
+            }
+        } finally {
+            disconnect();
         }
+        return false;
     }
 
-    public void handleAge(long userId, String input) throws NumberFormatException {
+    public void handleLogin(long userId, String input) throws SQLException {
         UserProfile profile = getOrCreateUserProfile(userId);
-        profile.age = Integer.parseInt(input);
+        profile.setLogin(input);
+        updateUserProfile(profile);
     }
 
-    public void handleHeight(long userId, String input) throws NumberFormatException {
+    public void handlePassword(long userId, String input) throws SQLException {
         UserProfile profile = getOrCreateUserProfile(userId);
-        profile.height = Integer.parseInt(input);
+        profile.setPassword(input);
+        updateUserProfile(profile);
     }
 
-    public void handleWeight(long userId, String input) throws NumberFormatException, SQLException {
+    public void handleNickname(long userId, String input) throws SQLException {
         UserProfile profile = getOrCreateUserProfile(userId);
-        profile.weight = Integer.parseInt(input);
-        createUserProfile(userId, profile.nickname, profile.age, profile.height, profile.weight);
+        profile.setNickname(input);
+        updateUserProfile(profile);
+    }
+
+    public void handleAge(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setAge(Integer.parseInt(input));
+        updateUserProfile(profile);
+    }
+
+    public void handleHeight(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setHeight(Integer.parseInt(input));
+        updateUserProfile(profile);
+    }
+
+    public void handleWeight(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setWeight(Integer.parseInt(input));
+        updateUserProfile(profile);
     }
 
     private UserProfile getOrCreateUserProfile(long userId) {
@@ -145,7 +187,7 @@ public class DatabaseManager {
     }
 
     public ResultSet getUserProfileFromDB(long userId) throws SQLException {
-        String query = "SELECT nickname, age, height, weight FROM user_profiles WHERE user_id = ?";
+        String query = "SELECT login, password, nickname, age, height, weight FROM user_profiles WHERE user_id = ?";
         return select(query, userId);
     }
 
@@ -155,7 +197,8 @@ public class DatabaseManager {
         StringBuilder profile = new StringBuilder();
 
         if (resultSet.next()) {
-            profile.append(String.format("<b>Ваш профиль:</b>\n<b>Никнейм:</b> <i>%s</i>\n<b>Возраст:</b> <i>%d</i>\n<b>Рост:</b> <i>%d</i>\n<b>Вес:</b> <i>%d</i>",
+            profile.append(String.format("<b>Ваш профиль:</b>\n<b>Логин:</b> <i>%s</i>\n<b>Никнейм:</b> <i>%s</i>\n<b>Возраст:</b> <i>%d</i>\n<b>Рост:</b> <i>%d</i>\n<b>Вес:</b> <i>%d</i>",
+                    resultSet.getString("login"),
                     resultSet.getString("nickname"),
                     resultSet.getInt("age"),
                     resultSet.getInt("height"),
@@ -191,6 +234,13 @@ public class DatabaseManager {
         return result;
     }
 
+    public void updateUserProfile(UserProfile profile) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET login = ?, password = ?, nickname = ?, age = ?, height = ?, weight = ? WHERE user_id = ?";
+        update(query, profile.getLogin(), profile.getPassword(), profile.getNickname(), profile.getAge(), profile.getHeight(), profile.getWeight(), profile.getUserId());
+        disconnect();
+    }
+
     public void handleProfileCreation(long userId, String input) {
         UserState state = userStates.get(userId);
         BiConsumer<Long, String> handler = stateHandlers.get(state);
@@ -203,14 +253,36 @@ public class DatabaseManager {
     }
 
     private void initializeStateHandlers() {
+        stateHandlers.put(UserState.CREATE_PROFILE_LOGIN, (userId, input) -> {
+            try {
+                handleLogin(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Введите ваш пароль:");
+                userStates.put(userId, UserState.CREATE_PROFILE_PASSWORD);
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при создании профиля. Попробуйте позже.");
+                userStates.remove(userId);
+                e.printStackTrace();
+            }
+        });
+
+        stateHandlers.put(UserState.CREATE_PROFILE_PASSWORD, (userId, input) -> {
+            try {
+                handlePassword(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Введите ваш никнейм:");
+                userStates.put(userId, UserState.ENTER_NICKNAME);
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при создании профиля. Попробуйте позже.");
+                e.printStackTrace();
+            }
+        });
+
         stateHandlers.put(UserState.ENTER_NICKNAME, (userId, input) -> {
             try {
                 handleNickname(userId, input);
                 bot.sendMsg(String.valueOf(userId), "Введите ваш возраст:");
                 userStates.put(userId, UserState.ENTER_AGE);
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "У вас уже есть профиль. Регистрация отменена.");
-                userStates.remove(userId);
+                bot.sendMsg(String.valueOf(userId), "Ошибка при сохранении никнейма. Попробуйте позже.");
                 e.printStackTrace();
             }
         });
@@ -222,6 +294,9 @@ public class DatabaseManager {
                 userStates.put(userId, UserState.ENTER_HEIGHT);
             } catch (NumberFormatException e) {
                 bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный возраст.");
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при сохранении возраста. Попробуйте позже.");
+                e.printStackTrace();
             }
         });
 
@@ -232,6 +307,9 @@ public class DatabaseManager {
                 userStates.put(userId, UserState.ENTER_WEIGHT);
             } catch (NumberFormatException e) {
                 bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный рост.");
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при сохранении роста. Попробуйте позже.");
+                e.printStackTrace();
             }
         });
 
@@ -243,7 +321,7 @@ public class DatabaseManager {
             } catch (NumberFormatException e) {
                 bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный вес.");
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при сохранении профиля. Попробуйте позже.");
+                bot.sendMsg(String.valueOf(userId), "Ошибка при сохранении веса. Попробуйте позже.");
                 e.printStackTrace();
             }
         });
@@ -277,6 +355,7 @@ public class DatabaseManager {
             }
         });
     }
+
 
     public void setUserState(long userId, UserState state) {
         userStates.put(userId, state);
@@ -525,6 +604,36 @@ public class DatabaseManager {
 
         disconnect();
         return courseId;
+    }
+
+    public void logoutUser(long userId) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET is_logged_in = ? WHERE user_id = ?";
+        update(query, false, userId);
+        disconnect();
+    }
+
+    public void handleProfileCreationOrLogin(long userId, String input) {
+        UserState state = userStates.get(userId);
+        BiConsumer<Long, String> handler = stateHandlers.get(state);
+
+        if (handler != null) {
+            handler.accept(userId, input);
+        } else {
+            userStates.remove(userId);
+        }
+
+        // После завершения ввода всех данных профиля, сохраняем профиль в базу данных
+        if (state == UserState.ENTER_WEIGHT) {
+            try {
+                UserProfile profile = getUserProfile(userId);
+                createUserProfile(userId, profile.getLogin(), profile.getPassword(), profile.getNickname(), profile.getAge(), profile.getHeight(), profile.getWeight());
+                userStates.remove(userId); // Удаляем состояние пользователя после завершения создания профиля
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при сохранении профиля. Попробуйте позже.");
+                LoggerUtil.logError(userId, "Ошибка при сохранении профиля: " + e.getMessage());
+            }
+        }
     }
 
 }

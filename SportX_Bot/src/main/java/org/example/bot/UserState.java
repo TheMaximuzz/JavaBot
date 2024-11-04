@@ -1,11 +1,12 @@
 package org.example.bot;
 
 public enum UserState {
+    CREATE_PROFILE_LOGIN,
+    CREATE_PROFILE_PASSWORD,
     ENTER_NICKNAME,
     ENTER_AGE,
     ENTER_HEIGHT,
     ENTER_WEIGHT,
     SELECT_COURSE,
     VIEW_EXERCISES,
-    COMPLETED
 }
