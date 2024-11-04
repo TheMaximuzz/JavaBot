@@ -94,8 +94,12 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         registerCommand("/viewprofile", "Посмотреть данные профиля", (chatId, builder) -> {
             try {
-                builder.append(databaseManager.getUserProfileAsString(Long.parseLong(chatId)));
-                LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь просмотрел свой профиль.");
+                if (databaseManager.isUserLoggedIn(Long.parseLong(chatId))) {
+                    builder.append(databaseManager.getUserProfileAsString(Long.parseLong(chatId)));
+                    LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь просмотрел свой профиль.");
+                } else {
+                    builder.append("Ошибка. Зарегистрируйтесь или войдите в аккаунт.");
+                }
             } catch (SQLException e) {
                 builder.append("Ошибка при получении профиля. Попробуйте позже.");
                 LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при получении профиля: " + e.getMessage());
@@ -158,6 +162,11 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         });
 
+        registerCommand("/login", "Войти в аккаунт", (chatId, builder) -> {
+            builder.append("Пожалуйста, введите ваш логин:");
+            databaseManager.setUserState(Long.parseLong(chatId), UserState.LOGIN_LOGIN);
+            LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал процесс входа.");
+        });
 
         registerCommand("/logout", "Выйти из профиля", (chatId, builder) -> {
             try {
@@ -251,6 +260,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+
     private void handleCommand(long userId, String command, String text) {
         UserState userState = databaseManager.getUserState(userId);
 
@@ -267,8 +277,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             LoggerUtil.logInfo(userId, "Пользователь выполнил команду: " + command);
         }
     }
-
-
 
     // Метод для отправки сообщений
     public void sendMsg(String chatId, String text) {

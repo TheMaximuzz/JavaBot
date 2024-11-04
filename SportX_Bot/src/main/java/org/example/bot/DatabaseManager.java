@@ -60,12 +60,25 @@ public class DatabaseManager {
         }
     }
 
+
     public void createUserProfile(long userId, String login, String password, String nickname, Integer age, Integer height, Integer weight) throws SQLException {
         connect();
         String query = "INSERT INTO user_profiles (user_id, login, password, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        insert(query, userId, login, password, nickname, age, height, weight);
-        disconnect();
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setLong(1, userId);
+            statement.setString(2, login);
+            statement.setString(3, password);
+            statement.setString(4, nickname);
+            statement.setInt(5, age);
+            statement.setInt(6, height);
+            statement.setInt(7, weight);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
     }
+
+
 
     public boolean isUserLoggedIn(long userId) throws SQLException {
         connect();
@@ -96,13 +109,11 @@ public class DatabaseManager {
         return false;
     }
 
-    public boolean validateLogin(long userId, String login, String password) throws SQLException {
-        String query = "SELECT COUNT(*) FROM user_profiles WHERE user_id = ? AND login = ? AND password = ?";
+    public boolean isProfileExists(String login) throws SQLException {
+        String query = "SELECT COUNT(*) FROM user_profiles WHERE login = ?";
         connect();
         try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setLong(1, userId);
-            statement.setString(2, login);
-            statement.setString(3, password);
+            statement.setString(1, login);
             ResultSet resultSet = statement.executeQuery();
             if (resultSet.next()) {
                 return resultSet.getInt(1) > 0;
@@ -112,6 +123,41 @@ public class DatabaseManager {
         }
         return false;
     }
+
+
+
+    public boolean validateLogin(String login, String password) throws SQLException {
+        String query = "SELECT user_id FROM user_profiles WHERE login = ? AND password = ?";
+        connect();
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, login);
+            statement.setString(2, password);
+            ResultSet resultSet = statement.executeQuery();
+            if (resultSet.next()) {
+                long userId = resultSet.getLong("user_id");
+                updateUserLoginStatus(userId, true);
+                return true;
+            }
+        } finally {
+            disconnect();
+        }
+        return false;
+    }
+
+
+    public void updateUserLoginStatus(long userId, boolean isLoggedIn) throws SQLException {
+        String query = "UPDATE user_profiles SET is_logged_in = ? WHERE user_id = ?";
+        connect();
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setBoolean(1, isLoggedIn);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+
 
     public void handleLogin(long userId, String input) throws SQLException {
         UserProfile profile = getOrCreateUserProfile(userId);
@@ -124,6 +170,21 @@ public class DatabaseManager {
         profile.setPassword(input);
         updateUserProfile(profile);
     }
+
+    public void handleLoginPassword(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setPassword(input);
+
+        if (validateLogin(profile.getLogin(), profile.getPassword())) {
+            updateUserProfile(profile);
+            bot.sendMsg(String.valueOf(userId), "Вы успешно вошли в аккаунт!");
+            userStates.remove(userId);
+        } else {
+            bot.sendMsg(String.valueOf(userId), "Ошибка логина или пароля. Попробуйте снова.");
+            userStates.put(userId, UserState.LOGIN_LOGIN);
+        }
+    }
+
 
     public void handleNickname(long userId, String input) throws SQLException {
         UserProfile profile = getOrCreateUserProfile(userId);
@@ -193,7 +254,8 @@ public class DatabaseManager {
 
     public String getUserProfileAsString(long userId) throws SQLException {
         connect();
-        ResultSet resultSet = getUserProfileFromDB(userId);
+        String query = "SELECT login, password, nickname, age, height, weight FROM user_profiles WHERE user_id = ?";
+        ResultSet resultSet = select(query, userId);
         StringBuilder profile = new StringBuilder();
 
         if (resultSet.next()) {
@@ -237,8 +299,18 @@ public class DatabaseManager {
     public void updateUserProfile(UserProfile profile) throws SQLException {
         connect();
         String query = "UPDATE user_profiles SET login = ?, password = ?, nickname = ?, age = ?, height = ?, weight = ? WHERE user_id = ?";
-        update(query, profile.getLogin(), profile.getPassword(), profile.getNickname(), profile.getAge(), profile.getHeight(), profile.getWeight(), profile.getUserId());
-        disconnect();
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, profile.getLogin());
+            statement.setString(2, profile.getPassword());
+            statement.setString(3, profile.getNickname());
+            statement.setInt(4, profile.getAge());
+            statement.setInt(5, profile.getHeight());
+            statement.setInt(6, profile.getWeight());
+            statement.setLong(7, profile.getUserId());
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
     }
 
     public void handleProfileCreation(long userId, String input) {
@@ -253,6 +325,29 @@ public class DatabaseManager {
     }
 
     private void initializeStateHandlers() {
+
+        stateHandlers.put(UserState.LOGIN_LOGIN, (userId, input) -> {
+            try {
+                handleLogin(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Введите ваш пароль:");
+                userStates.put(userId, UserState.LOGIN_PASSWORD);
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при входе. Попробуйте позже.");
+                userStates.remove(userId);
+                e.printStackTrace();
+            }
+        });
+
+        stateHandlers.put(UserState.LOGIN_PASSWORD, (userId, input) -> {
+            try {
+                handleLoginPassword(userId, input);
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при входе. Попробуйте позже.");
+                userStates.remove(userId);
+                e.printStackTrace();
+            }
+        });
+
         stateHandlers.put(UserState.CREATE_PROFILE_LOGIN, (userId, input) -> {
             try {
                 handleLogin(userId, input);

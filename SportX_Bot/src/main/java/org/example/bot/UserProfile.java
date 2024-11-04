@@ -91,4 +91,3 @@ public class UserProfile {
         isLoggedIn = loggedIn;
     }
 }
-

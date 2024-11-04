@@ -9,4 +9,6 @@ public enum UserState {
     ENTER_WEIGHT,
     SELECT_COURSE,
     VIEW_EXERCISES,
+    LOGIN_LOGIN,
+    LOGIN_PASSWORD
 }
