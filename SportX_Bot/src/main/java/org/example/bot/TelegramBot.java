@@ -170,14 +170,16 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         registerCommand("/logout", "Выйти из профиля", (chatId, builder) -> {
             try {
-                databaseManager.logoutUser(Long.parseLong(chatId));
-                builder.append("Вы успешно вышли из профиля.");
-                LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь вышел из профиля.");
+                long telegramChatId = Long.parseLong(chatId);
+                databaseManager.logoutUser(telegramChatId);
+                builder.append("Вы успешно вышли из всех сессий.");
+                LoggerUtil.logInfo(telegramChatId, "Пользователь вышел из всех сессий.");
             } catch (SQLException e) {
                 builder.append("Ошибка при выходе из профиля. Попробуйте позже.");
                 LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при выходе из профиля: " + e.getMessage());
             }
         });
+
     }
 
     @Override
@@ -267,16 +269,38 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (userState != null) {
             databaseManager.handleProfileCreationOrLogin(userId, text);
         } else {
-            BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(command, (id, builder) -> {
-                builder.append("Неизвестная команда. Используйте /help для списка команд.");
-            });
+            try {
+                boolean isLoggedIn = databaseManager.isUserLoggedIn(userId);
+                if (!isLoggedIn) {
+                    if (commandsRequiringAuth.contains(command)) {
+                        sendMsg(String.valueOf(userId), "Ошибка. Зарегистрируйтесь или войдите в аккаунт.");
+                    } else {
+                        BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(command, (id, builder) -> {
+                            builder.append("Неизвестная команда. Используйте /help для списка команд.");
+                        });
 
-            StringBuilder responseBuilder = new StringBuilder();
-            action.accept(String.valueOf(userId), responseBuilder);
-            sendMsg(String.valueOf(userId), responseBuilder.toString());
-            LoggerUtil.logInfo(userId, "Пользователь выполнил команду: " + command);
+                        StringBuilder responseBuilder = new StringBuilder();
+                        action.accept(String.valueOf(userId), responseBuilder);
+                        sendMsg(String.valueOf(userId), responseBuilder.toString());
+                        LoggerUtil.logInfo(userId, "Пользователь выполнил команду: " + command);
+                    }
+                } else {
+                    BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(command, (id, builder) -> {
+                        builder.append("Неизвестная команда. Используйте /help для списка команд.");
+                    });
+
+                    StringBuilder responseBuilder = new StringBuilder();
+                    action.accept(String.valueOf(userId), responseBuilder);
+                    sendMsg(String.valueOf(userId), responseBuilder.toString());
+                    LoggerUtil.logInfo(userId, "Пользователь выполнил команду: " + command);
+                }
+            } catch (SQLException e) {
+                sendMsg(String.valueOf(userId), "Ошибка при выполнении команды. Попробуйте позже.");
+                LoggerUtil.logError(userId, "Ошибка при выполнении команды: " + e.getMessage());
+            }
         }
     }
+
 
     // Метод для отправки сообщений
     public void sendMsg(String chatId, String text) {

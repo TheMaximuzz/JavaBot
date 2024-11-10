@@ -61,9 +61,9 @@ public class DatabaseManager {
     }
 
 
-    public void createUserProfile(long userId, String login, String password, String nickname, Integer age, Integer height, Integer weight) throws SQLException {
+    public void createUserProfile(long userId, String login, String password, String nickname, Integer age, Integer height, Integer weight, long telegramChatId) throws SQLException {
         connect();
-        String query = "INSERT INTO user_profiles (user_id, login, password, nickname, age, height, weight) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String query = "INSERT INTO user_profiles (user_id, login, password, nickname, age, height, weight, telegram_chat_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement statement = connection.prepareStatement(query)) {
             statement.setLong(1, userId);
             statement.setString(2, login);
@@ -72,27 +72,17 @@ public class DatabaseManager {
             statement.setInt(5, age);
             statement.setInt(6, height);
             statement.setInt(7, weight);
+            statement.setLong(8, telegramChatId);
             statement.executeUpdate();
         } finally {
             disconnect();
         }
     }
 
-
-
-    public boolean isUserLoggedIn(long userId) throws SQLException {
-        connect();
-        String query = "SELECT is_logged_in FROM user_profiles WHERE user_id = ?";
-        ResultSet resultSet = select(query, userId);
-        boolean isLoggedIn = false;
-
-        if (resultSet.next()) {
-            isLoggedIn = resultSet.getBoolean("is_logged_in");
-        }
-
-        disconnect();
-        return isLoggedIn;
+    public boolean isUserLoggedIn(long telegramChatId) throws SQLException {
+        return isSessionActive(telegramChatId);
     }
+
 
     public boolean isProfileExists(long userId) throws SQLException {
         String query = "SELECT COUNT(*) FROM user_profiles WHERE user_id = ?";
@@ -109,24 +99,8 @@ public class DatabaseManager {
         return false;
     }
 
-    public boolean isProfileExists(String login) throws SQLException {
-        String query = "SELECT COUNT(*) FROM user_profiles WHERE login = ?";
-        connect();
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setString(1, login);
-            ResultSet resultSet = statement.executeQuery();
-            if (resultSet.next()) {
-                return resultSet.getInt(1) > 0;
-            }
-        } finally {
-            disconnect();
-        }
-        return false;
-    }
 
-
-
-    public boolean validateLogin(String login, String password) throws SQLException {
+    public long validateLogin(String login, String password) throws SQLException {
         String query = "SELECT user_id FROM user_profiles WHERE login = ? AND password = ?";
         connect();
         try (PreparedStatement statement = connection.prepareStatement(query)) {
@@ -134,15 +108,27 @@ public class DatabaseManager {
             statement.setString(2, password);
             ResultSet resultSet = statement.executeQuery();
             if (resultSet.next()) {
-                long userId = resultSet.getLong("user_id");
-                updateUserLoginStatus(userId, true);
-                return true;
+                return resultSet.getLong("user_id");
             }
         } finally {
             disconnect();
         }
-        return false;
+        return -1; // Возвращаем -1, если пользователь не найден
     }
+
+
+    public void updateTelegramChatId(long userId, long telegramChatId) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET telegram_chat_id = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setLong(1, telegramChatId);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
 
 
     public void updateUserLoginStatus(long userId, boolean isLoggedIn) throws SQLException {
@@ -171,19 +157,57 @@ public class DatabaseManager {
         updateUserProfile(profile);
     }
 
-    public void handleLoginPassword(long userId, String input) throws SQLException {
-        UserProfile profile = getOrCreateUserProfile(userId);
+    public void handleLoginPassword(long telegramChatId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(telegramChatId);
         profile.setPassword(input);
 
-        if (validateLogin(profile.getLogin(), profile.getPassword())) {
-            updateUserProfile(profile);
-            bot.sendMsg(String.valueOf(userId), "Вы успешно вошли в аккаунт!");
-            userStates.remove(userId);
+        long userId = validateLogin(profile.getLogin(), profile.getPassword());
+        if (userId != -1) {
+            createSession(userId, telegramChatId); // Создаем новую сессию
+            bot.sendMsg(String.valueOf(telegramChatId), "Вы успешно вошли в аккаунт!");
+            userStates.remove(telegramChatId);
         } else {
-            bot.sendMsg(String.valueOf(userId), "Ошибка логина или пароля. Попробуйте снова.");
-            userStates.put(userId, UserState.LOGIN_LOGIN);
+            bot.sendMsg(String.valueOf(telegramChatId), "Ошибка логина или пароля. Попробуйте снова.");
+            userStates.put(telegramChatId, UserState.LOGIN_LOGIN);
         }
     }
+
+
+
+    public void createSession(long userId, long telegramChatId) throws SQLException {
+        connect();
+        String query = "INSERT INTO user_sessions (user_id, telegram_chat_id) VALUES (?, ?)";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setLong(1, userId);
+            statement.setLong(2, telegramChatId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public boolean isSessionActive(long telegramChatId) throws SQLException {
+        connect();
+        String query = "SELECT COUNT(*) FROM user_sessions WHERE telegram_chat_id = ?";
+        ResultSet resultSet = select(query, telegramChatId);
+        boolean isActive = false;
+
+        if (resultSet.next()) {
+            isActive = resultSet.getInt(1) > 0;
+        }
+
+        disconnect();
+        return isActive;
+    }
+
+
+    public void logoutAllSessions(long userId) throws SQLException {
+        connect();
+        String query = "DELETE FROM user_sessions WHERE user_id = ?";
+        delete(query, userId);
+        disconnect();
+    }
+
 
 
     public void handleNickname(long userId, String input) throws SQLException {
@@ -252,10 +276,13 @@ public class DatabaseManager {
         return select(query, userId);
     }
 
-    public String getUserProfileAsString(long userId) throws SQLException {
+    public String getUserProfileAsString(long telegramChatId) throws SQLException {
         connect();
-        String query = "SELECT login, password, nickname, age, height, weight FROM user_profiles WHERE user_id = ?";
-        ResultSet resultSet = select(query, userId);
+        String query = "SELECT up.login, up.password, up.nickname, up.age, up.height, up.weight " +
+                "FROM user_profiles up " +
+                "JOIN user_sessions us ON up.user_id = us.user_id " +
+                "WHERE us.telegram_chat_id = ?";
+        ResultSet resultSet = select(query, telegramChatId);
         StringBuilder profile = new StringBuilder();
 
         if (resultSet.next()) {
@@ -273,10 +300,12 @@ public class DatabaseManager {
         return profile.toString();
     }
 
+
     public void deleteUserProfile(long userId) throws SQLException {
         String query = "DELETE FROM user_profiles WHERE user_id = ?";
         delete(query, userId);
     }
+
 
     public String deleteUserProfileAsString(long userId) throws SQLException {
         String result;
@@ -322,7 +351,23 @@ public class DatabaseManager {
         } else {
             userStates.remove(userId);
         }
+
+        // После завершения ввода всех данных профиля, сохраняем профиль в базу данных
+        if (state == UserState.ENTER_WEIGHT) {
+            try {
+                UserProfile profile = getUserProfile(userId);
+                createUserProfile(userId, profile.getLogin(), profile.getPassword(), profile.getNickname(), profile.getAge(), profile.getHeight(), profile.getWeight(), userId);
+                createSession(userId, userId); // Создаем новую сессию
+                bot.sendMsg(String.valueOf(userId), "Ваш профиль успешно создан и вы вошли в аккаунт!");
+                userStates.remove(userId); // Удаляем состояние пользователя после завершения создания профиля
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при сохранении профиля. Попробуйте позже.");
+                LoggerUtil.logError(userId, "Ошибка при сохранении профиля: " + e.getMessage());
+            }
+        }
     }
+
+
 
     private void initializeStateHandlers() {
 
@@ -701,34 +746,42 @@ public class DatabaseManager {
         return courseId;
     }
 
-    public void logoutUser(long userId) throws SQLException {
+    public void logoutUser(long telegramChatId) throws SQLException {
         connect();
-        String query = "UPDATE user_profiles SET is_logged_in = ? WHERE user_id = ?";
-        update(query, false, userId);
-        disconnect();
+        String query = "DELETE FROM user_sessions WHERE telegram_chat_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setLong(1, telegramChatId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
     }
 
-    public void handleProfileCreationOrLogin(long userId, String input) {
-        UserState state = userStates.get(userId);
+
+    public void handleProfileCreationOrLogin(long telegramChatId, String input) {
+        UserState state = userStates.get(telegramChatId);
         BiConsumer<Long, String> handler = stateHandlers.get(state);
 
         if (handler != null) {
-            handler.accept(userId, input);
+            handler.accept(telegramChatId, input);
         } else {
-            userStates.remove(userId);
+            userStates.remove(telegramChatId);
         }
 
         // После завершения ввода всех данных профиля, сохраняем профиль в базу данных
         if (state == UserState.ENTER_WEIGHT) {
             try {
-                UserProfile profile = getUserProfile(userId);
-                createUserProfile(userId, profile.getLogin(), profile.getPassword(), profile.getNickname(), profile.getAge(), profile.getHeight(), profile.getWeight());
-                userStates.remove(userId); // Удаляем состояние пользователя после завершения создания профиля
+                UserProfile profile = getUserProfile(telegramChatId);
+                createUserProfile(telegramChatId, profile.getLogin(), profile.getPassword(), profile.getNickname(), profile.getAge(), profile.getHeight(), profile.getWeight(), telegramChatId);
+                createSession(telegramChatId, telegramChatId); // Создаем новую сессию
+                bot.sendMsg(String.valueOf(telegramChatId), "Ваш профиль успешно создан и вы вошли в аккаунт!");
+                userStates.remove(telegramChatId); // Удаляем состояние пользователя после завершения создания профиля
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при сохранении профиля. Попробуйте позже.");
-                LoggerUtil.logError(userId, "Ошибка при сохранении профиля: " + e.getMessage());
+                bot.sendMsg(String.valueOf(telegramChatId), "Ошибка при сохранении профиля. Попробуйте позже.");
+                LoggerUtil.logError(telegramChatId, "Ошибка при сохранении профиля: " + e.getMessage());
             }
         }
     }
+
 
 }
