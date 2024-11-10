@@ -27,6 +27,7 @@ public class KeyboardMarkup {
         buttonTextToCommandMap.put("/viewexercises", "/viewexercises");
         buttonTextToCommandMap.put("/login", "/login");
         buttonTextToCommandMap.put("/logout", "/logout");
+        buttonTextToCommandMap.put("/editprofile", "/editprofile"); // Добавьте эту строку
     }
 
     public static ReplyKeyboardMarkup getMainMenuKeyboard() {
@@ -59,12 +60,16 @@ public class KeyboardMarkup {
         row6.add(new KeyboardButton("/viewworkouts"));
         row6.add(new KeyboardButton("/viewexercises"));
 
+        KeyboardRow row7 = new KeyboardRow();
+        row7.add(new KeyboardButton("/editprofile")); // Добавьте эту строку
+
         keyboardRows.add(row1);
         keyboardRows.add(row2);
         keyboardRows.add(row3);
         keyboardRows.add(row4);
         keyboardRows.add(row5);
         keyboardRows.add(row6);
+        keyboardRows.add(row7); // Добавьте эту строку
 
         keyboardMarkup.setKeyboard(keyboardRows);
         return keyboardMarkup;

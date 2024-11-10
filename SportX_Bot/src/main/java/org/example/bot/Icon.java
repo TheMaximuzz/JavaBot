@@ -11,7 +11,8 @@ public enum Icon {
     FLAG(":checkered_flag:"),
     BICEPS(":muscle:"),
     TADA(":tada:"),
-    HAT(":mortar_board:");
+    HAT(":mortar_board:"),
+    SKIP(":fast_forward:");
 
     private String value;
 

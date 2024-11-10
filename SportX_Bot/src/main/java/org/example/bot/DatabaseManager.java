@@ -80,9 +80,32 @@ public class DatabaseManager {
     }
 
     public boolean isUserLoggedIn(long telegramChatId) throws SQLException {
-        return isSessionActive(telegramChatId);
+        connect();
+        String query = "SELECT COUNT(*) FROM user_sessions WHERE telegram_chat_id = ?";
+        ResultSet resultSet = select(query, telegramChatId);
+        boolean isActive = false;
+
+        if (resultSet.next()) {
+            isActive = resultSet.getInt(1) > 0;
+        }
+
+        disconnect();
+        return isActive;
     }
 
+    public long getUserIdByTelegramChatId(long telegramChatId) throws SQLException {
+        connect();
+        String query = "SELECT user_id FROM user_sessions WHERE telegram_chat_id = ?";
+        ResultSet resultSet = select(query, telegramChatId);
+        long userId = -1;
+
+        if (resultSet.next()) {
+            userId = resultSet.getLong("user_id");
+        }
+
+        disconnect();
+        return userId;
+    }
 
     public boolean isProfileExists(long userId) throws SQLException {
         String query = "SELECT COUNT(*) FROM user_profiles WHERE user_id = ?";
@@ -172,6 +195,43 @@ public class DatabaseManager {
         }
     }
 
+    public void handleEditLogin(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setLogin(input);
+        updateUserProfile(profile);
+    }
+
+    public void handleEditPassword(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setPassword(input);
+        updateUserProfile(profile);
+    }
+
+    public void handleEditNickname(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setNickname(input);
+        updateUserProfile(profile);
+    }
+
+    public void handleEditAge(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setAge(Integer.parseInt(input));
+        updateUserProfile(profile);
+    }
+
+    public void handleEditHeight(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setHeight(Integer.parseInt(input));
+        updateUserProfile(profile);
+    }
+
+    public void handleEditWeight(long userId, String input) throws SQLException {
+        UserProfile profile = getOrCreateUserProfile(userId);
+        profile.setWeight(Integer.parseInt(input));
+        updateUserProfile(profile);
+    }
+
+
 
 
     public void createSession(long userId, long telegramChatId) throws SQLException {
@@ -235,7 +295,26 @@ public class DatabaseManager {
     }
 
     private UserProfile getOrCreateUserProfile(long userId) {
-        return userProfiles.computeIfAbsent(userId, k -> new UserProfile());
+        UserProfile profile = userProfiles.get(userId);
+        if (profile == null) {
+            try {
+                ResultSet resultSet = getUserProfileFromDB(userId);
+                if (resultSet.next()) {
+                    profile = new UserProfile();
+                    profile.setUserId(userId);
+                    profile.setLogin(resultSet.getString("login"));
+                    profile.setPassword(resultSet.getString("password"));
+                    profile.setNickname(resultSet.getString("nickname"));
+                    profile.setAge(resultSet.getInt("age"));
+                    profile.setHeight(resultSet.getInt("height"));
+                    profile.setWeight(resultSet.getInt("weight"));
+                    userProfiles.put(userId, profile);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        return profile;
     }
 
     public void insert(String query, Object... parameters) throws SQLException {
@@ -273,16 +352,18 @@ public class DatabaseManager {
 
     public ResultSet getUserProfileFromDB(long userId) throws SQLException {
         String query = "SELECT login, password, nickname, age, height, weight FROM user_profiles WHERE user_id = ?";
-        return select(query, userId);
+        connect();
+        PreparedStatement statement = connection.prepareStatement(query);
+        statement.setLong(1, userId);
+        return statement.executeQuery();
     }
 
+
     public String getUserProfileAsString(long telegramChatId) throws SQLException {
+        long userId = getUserIdByTelegramChatId(telegramChatId);
         connect();
-        String query = "SELECT up.login, up.password, up.nickname, up.age, up.height, up.weight " +
-                "FROM user_profiles up " +
-                "JOIN user_sessions us ON up.user_id = us.user_id " +
-                "WHERE us.telegram_chat_id = ?";
-        ResultSet resultSet = select(query, telegramChatId);
+        String query = "SELECT login, password, nickname, age, height, weight FROM user_profiles WHERE user_id = ?";
+        ResultSet resultSet = select(query, userId);
         StringBuilder profile = new StringBuilder();
 
         if (resultSet.next()) {
@@ -494,6 +575,84 @@ public class DatabaseManager {
                 e.printStackTrace();
             }
         });
+
+        stateHandlers.put(UserState.EDIT_PROFILE_LOGIN, (userId, input) -> {
+            try {
+                handleEditLogin(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Введите новое значение для пароля:");
+                setUserState(userId, UserState.EDIT_PROFILE_PASSWORD);
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании логина. Попробуйте позже.");
+                removeUserState(userId);
+                e.printStackTrace();
+            }
+        });
+
+        stateHandlers.put(UserState.EDIT_PROFILE_PASSWORD, (userId, input) -> {
+            try {
+                handleEditPassword(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Введите новое значение для никнейма:");
+                setUserState(userId, UserState.EDIT_PROFILE_NICKNAME);
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании пароля. Попробуйте позже.");
+                removeUserState(userId);
+                e.printStackTrace();
+            }
+        });
+
+        stateHandlers.put(UserState.EDIT_PROFILE_NICKNAME, (userId, input) -> {
+            try {
+                handleEditNickname(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Введите новое значение для возраста:");
+                setUserState(userId, UserState.EDIT_PROFILE_AGE);
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании никнейма. Попробуйте позже.");
+                removeUserState(userId);
+                e.printStackTrace();
+            }
+        });
+
+        stateHandlers.put(UserState.EDIT_PROFILE_AGE, (userId, input) -> {
+            try {
+                handleEditAge(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Введите новое значение для роста (в см):");
+                setUserState(userId, UserState.EDIT_PROFILE_HEIGHT);
+            } catch (NumberFormatException e) {
+                bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный возраст.");
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании возраста. Попробуйте позже.");
+                removeUserState(userId);
+                e.printStackTrace();
+            }
+        });
+
+        stateHandlers.put(UserState.EDIT_PROFILE_HEIGHT, (userId, input) -> {
+            try {
+                handleEditHeight(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Введите новое значение для веса (в кг):");
+                setUserState(userId, UserState.EDIT_PROFILE_WEIGHT);
+            } catch (NumberFormatException e) {
+                bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный рост.");
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании роста. Попробуйте позже.");
+                removeUserState(userId);
+                e.printStackTrace();
+            }
+        });
+
+        stateHandlers.put(UserState.EDIT_PROFILE_WEIGHT, (userId, input) -> {
+            try {
+                handleEditWeight(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Ваш профиль успешно обновлен!");
+                removeUserState(userId);
+            } catch (NumberFormatException e) {
+                bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный вес.");
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании веса. Попробуйте позже.");
+                removeUserState(userId);
+                e.printStackTrace();
+            }
+        });
     }
 
 
@@ -551,14 +710,16 @@ public class DatabaseManager {
         return courses;
     }
 
-    public void updateUserCourse(long userId, int courseId) throws SQLException {
+    public void updateUserCourse(long telegramChatId, int courseId) throws SQLException {
+        long userId = getUserIdByTelegramChatId(telegramChatId);
         connect();
         String query = "UPDATE user_profiles SET course_id = ? WHERE user_id = ?";
         update(query, courseId, userId);
         disconnect();
     }
 
-    public String getWorkoutsAsString(long userId) throws SQLException {
+    public String getWorkoutsAsString(long telegramChatId) throws SQLException {
+        long userId = getUserIdByTelegramChatId(telegramChatId);
         connect();
         String query = "SELECT course_id FROM user_profiles WHERE user_id = ?";
         ResultSet resultSet = select(query, userId);
@@ -632,7 +793,8 @@ public class DatabaseManager {
         disconnect();
     }
 
-    public boolean isWorkoutCompleted(long userId, int workoutId) throws SQLException {
+    public boolean isWorkoutCompleted(long telegramChatId, int workoutId) throws SQLException {
+        long userId = getUserIdByTelegramChatId(telegramChatId);
         connect();
         String query = "SELECT completed FROM completed_workouts WHERE user_id = ? AND workout_id = ?";
         ResultSet resultSet = select(query, userId, workoutId);
@@ -782,6 +944,7 @@ public class DatabaseManager {
             }
         }
     }
+
 
 
 }

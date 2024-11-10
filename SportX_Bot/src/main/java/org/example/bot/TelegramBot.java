@@ -9,6 +9,8 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -19,6 +21,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.BiConsumer;
 import java.util.Arrays;
+import java.util.ArrayList;
 
 
 import java.sql.SQLException;
@@ -30,6 +33,8 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final Map<String, BiConsumer<String, StringBuilder>> commandMap = new HashMap<>();
     private final StringBuilder helpText = new StringBuilder();
+    private Map<UserState, UserState> stateTransitionMap = new HashMap<>();
+    private Map<UserState, String> stateMessageMap = new HashMap<>();
 
     private DatabaseManager databaseManager = new DatabaseManager(this);
 
@@ -43,9 +48,13 @@ public class TelegramBot extends TelegramLongPollingBot {
             "/logout"
     );
 
+
+
     public TelegramBot() {
         loadConfig();
         registerDefaultCommands();
+        initializeStateTransitionMap();
+        initializeStateMessageMap();
     }
 
     private void loadConfig() {
@@ -90,6 +99,12 @@ public class TelegramBot extends TelegramLongPollingBot {
             databaseManager.setUserState(Long.parseLong(chatId), UserState.CREATE_PROFILE_LOGIN);
             databaseManager.addUserProfile(Long.parseLong(chatId), new UserProfile());
             LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал создание профиля.");
+        });
+
+        registerCommand("/editprofile", "Редактировать профиль", (chatId, builder) -> {
+            builder.append("Пожалуйста, введите новое значение для логина:");
+            databaseManager.setUserState(Long.parseLong(chatId), UserState.EDIT_PROFILE_LOGIN);
+            LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал редактирование профиля.");
         });
 
         registerCommand("/viewprofile", "Посмотреть данные профиля", (chatId, builder) -> {
@@ -224,7 +239,19 @@ public class TelegramBot extends TelegramLongPollingBot {
             String callbackData = callbackQuery.getData();
             long userId = callbackQuery.getMessage().getChatId();
 
-            if (databaseManager.getUserState(userId) == UserState.SELECT_COURSE) {
+            if (callbackData.equals("skip")) {
+                UserState currentState = databaseManager.getUserState(userId);
+                if (currentState != null) {
+                    UserState nextState = getNextState(currentState);
+                    if (nextState != null) {
+                        databaseManager.setUserState(userId, nextState);
+                        sendMsgWithInlineKeyboard(String.valueOf(userId), getNextStateMessage(nextState), InlineKeyboardManager.getSkipButtonKeyboard());
+                    } else {
+                        sendMsg(String.valueOf(userId), "Ваш профиль успешно обновлен!");
+                        databaseManager.removeUserState(userId);
+                    }
+                }
+            } else if (databaseManager.getUserState(userId) == UserState.SELECT_COURSE) {
                 try {
                     int courseId = Integer.parseInt(callbackData);
                     databaseManager.updateUserCourse(userId, courseId);
@@ -263,26 +290,26 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
 
-    private void handleCommand(long userId, String command, String text) {
-        UserState userState = databaseManager.getUserState(userId);
+    private void handleCommand(long telegramChatId, String command, String text) {
+        UserState userState = databaseManager.getUserState(telegramChatId);
 
         if (userState != null) {
-            databaseManager.handleProfileCreationOrLogin(userId, text);
+            databaseManager.handleProfileCreationOrLogin(telegramChatId, text);
         } else {
             try {
-                boolean isLoggedIn = databaseManager.isUserLoggedIn(userId);
+                boolean isLoggedIn = databaseManager.isUserLoggedIn(telegramChatId);
                 if (!isLoggedIn) {
                     if (commandsRequiringAuth.contains(command)) {
-                        sendMsg(String.valueOf(userId), "Ошибка. Зарегистрируйтесь или войдите в аккаунт.");
+                        sendMsg(String.valueOf(telegramChatId), "Ошибка. Зарегистрируйтесь или войдите в аккаунт.");
                     } else {
                         BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(command, (id, builder) -> {
                             builder.append("Неизвестная команда. Используйте /help для списка команд.");
                         });
 
                         StringBuilder responseBuilder = new StringBuilder();
-                        action.accept(String.valueOf(userId), responseBuilder);
-                        sendMsg(String.valueOf(userId), responseBuilder.toString());
-                        LoggerUtil.logInfo(userId, "Пользователь выполнил команду: " + command);
+                        action.accept(String.valueOf(telegramChatId), responseBuilder);
+                        sendMsgWithInlineKeyboard(String.valueOf(telegramChatId), responseBuilder.toString(), InlineKeyboardManager.getSkipButtonKeyboard());
+                        LoggerUtil.logInfo(telegramChatId, "Пользователь выполнил команду: " + command);
                     }
                 } else {
                     BiConsumer<String, StringBuilder> action = commandMap.getOrDefault(command, (id, builder) -> {
@@ -290,17 +317,32 @@ public class TelegramBot extends TelegramLongPollingBot {
                     });
 
                     StringBuilder responseBuilder = new StringBuilder();
-                    action.accept(String.valueOf(userId), responseBuilder);
-                    sendMsg(String.valueOf(userId), responseBuilder.toString());
-                    LoggerUtil.logInfo(userId, "Пользователь выполнил команду: " + command);
+                    action.accept(String.valueOf(telegramChatId), responseBuilder);
+                    sendMsgWithInlineKeyboard(String.valueOf(telegramChatId), responseBuilder.toString(), InlineKeyboardManager.getSkipButtonKeyboard());
+                    LoggerUtil.logInfo(telegramChatId, "Пользователь выполнил команду: " + command);
                 }
             } catch (SQLException e) {
-                sendMsg(String.valueOf(userId), "Ошибка при выполнении команды. Попробуйте позже.");
-                LoggerUtil.logError(userId, "Ошибка при выполнении команды: " + e.getMessage());
+                sendMsg(String.valueOf(telegramChatId), "Ошибка при выполнении команды. Попробуйте позже.");
+                LoggerUtil.logError(telegramChatId, "Ошибка при выполнении команды: " + e.getMessage());
             }
         }
     }
 
+
+    public static InlineKeyboardMarkup getSkipButtonKeyboard() {
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboardRows = new ArrayList<>();
+
+        InlineKeyboardButton skipButton = new InlineKeyboardButton();
+        skipButton.setText(Icon.NOT.get());
+        skipButton.setCallbackData("skip");
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(skipButton);
+        keyboardRows.add(row);
+
+        keyboardMarkup.setKeyboard(keyboardRows);
+        return keyboardMarkup;
+    }
 
     // Метод для отправки сообщений
     public void sendMsg(String chatId, String text) {
@@ -324,7 +366,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         try {
             execute(message);
         } catch (TelegramApiException e) {
-            LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при отправке сообщения с клавиатурой: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -339,6 +381,30 @@ public class TelegramBot extends TelegramLongPollingBot {
         } catch (TelegramApiException e) {
             LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при отправке сообщения с инлайн-клавиатурой: " + e.getMessage());
         }
+    }
+
+    private void initializeStateTransitionMap() {
+        stateTransitionMap.put(UserState.EDIT_PROFILE_LOGIN, UserState.EDIT_PROFILE_PASSWORD);
+        stateTransitionMap.put(UserState.EDIT_PROFILE_PASSWORD, UserState.EDIT_PROFILE_NICKNAME);
+        stateTransitionMap.put(UserState.EDIT_PROFILE_NICKNAME, UserState.EDIT_PROFILE_AGE);
+        stateTransitionMap.put(UserState.EDIT_PROFILE_AGE, UserState.EDIT_PROFILE_HEIGHT);
+        stateTransitionMap.put(UserState.EDIT_PROFILE_HEIGHT, UserState.EDIT_PROFILE_WEIGHT);
+    }
+
+    private void initializeStateMessageMap() {
+        stateMessageMap.put(UserState.EDIT_PROFILE_PASSWORD, "Пожалуйста, введите новое значение для пароля:");
+        stateMessageMap.put(UserState.EDIT_PROFILE_NICKNAME, "Пожалуйста, введите новое значение для никнейма:");
+        stateMessageMap.put(UserState.EDIT_PROFILE_AGE, "Пожалуйста, введите новое значение для возраста:");
+        stateMessageMap.put(UserState.EDIT_PROFILE_HEIGHT, "Пожалуйста, введите новое значение для роста (в см):");
+        stateMessageMap.put(UserState.EDIT_PROFILE_WEIGHT, "Пожалуйста, введите новое значение для веса (в кг):");
+    }
+
+    private UserState getNextState(UserState currentState) {
+        return stateTransitionMap.getOrDefault(currentState, null);
+    }
+
+    private String getNextStateMessage(UserState nextState) {
+        return stateMessageMap.getOrDefault(nextState, "Ваш профиль успешно обновлен!");
     }
 
     // возвращает карту commandMap, которая содержит команды и связанные с ними действия.
@@ -408,4 +474,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
         return responseBuilder.toString();
     }
+
+
 }

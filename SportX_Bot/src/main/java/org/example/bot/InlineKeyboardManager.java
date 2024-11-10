@@ -56,4 +56,20 @@ public class InlineKeyboardManager {
         keyboardMarkup.setKeyboard(keyboardRows);
         return keyboardMarkup;
     }
+
+
+    public static InlineKeyboardMarkup getSkipButtonKeyboard() {
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboardRows = new ArrayList<>();
+
+        InlineKeyboardButton skipButton = new InlineKeyboardButton();
+        skipButton.setText(Icon.SKIP.get());
+        skipButton.setCallbackData("skip");
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(skipButton);
+        keyboardRows.add(row);
+
+        keyboardMarkup.setKeyboard(keyboardRows);
+        return keyboardMarkup;
+    }
 }
