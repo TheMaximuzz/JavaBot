@@ -61,7 +61,7 @@ public class KeyboardMarkup {
         row6.add(new KeyboardButton("/viewexercises"));
 
         KeyboardRow row7 = new KeyboardRow();
-        row7.add(new KeyboardButton("/editprofile")); // Добавьте эту строку
+        row7.add(new KeyboardButton("/editprofile"));
 
         keyboardRows.add(row1);
         keyboardRows.add(row2);
@@ -69,7 +69,7 @@ public class KeyboardMarkup {
         keyboardRows.add(row4);
         keyboardRows.add(row5);
         keyboardRows.add(row6);
-        keyboardRows.add(row7); // Добавьте эту строку
+        keyboardRows.add(row7);
 
         keyboardMarkup.setKeyboard(keyboardRows);
         return keyboardMarkup;
