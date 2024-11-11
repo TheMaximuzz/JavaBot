@@ -45,7 +45,8 @@ public class TelegramBot extends TelegramLongPollingBot {
             "/selectcourse",
             "/viewworkouts",
             "/viewexercises",
-            "/logout"
+            "/logout",
+            "/editprofile"
     );
 
 
@@ -290,12 +291,23 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
 
+
     private void handleCommand(long telegramChatId, String command, String text) {
         UserState userState = databaseManager.getUserState(telegramChatId);
 
         if (userState != null) {
+            // Обработка ввода данных пользователем
             databaseManager.handleProfileCreationOrLogin(telegramChatId, text);
+            UserState nextState = getNextState(userState);
+            if (nextState != null) {
+                databaseManager.setUserState(telegramChatId, nextState);
+                sendMsgWithInlineKeyboard(String.valueOf(telegramChatId), getNextStateMessage(nextState), InlineKeyboardManager.getSkipButtonKeyboard());
+            } else {
+                sendMsg(String.valueOf(telegramChatId), "Ваш профиль успешно обновлен!");
+                databaseManager.removeUserState(telegramChatId);
+            }
         } else {
+            // Обработка команды
             try {
                 boolean isLoggedIn = databaseManager.isUserLoggedIn(telegramChatId);
                 if (!isLoggedIn) {
@@ -308,7 +320,11 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                         StringBuilder responseBuilder = new StringBuilder();
                         action.accept(String.valueOf(telegramChatId), responseBuilder);
-                        sendMsgWithInlineKeyboard(String.valueOf(telegramChatId), responseBuilder.toString(), InlineKeyboardManager.getSkipButtonKeyboard());
+                        if (command.equals("/editprofile")) {
+                            sendMsgWithInlineKeyboard(String.valueOf(telegramChatId), responseBuilder.toString(), InlineKeyboardManager.getSkipButtonKeyboard());
+                        } else {
+                            sendMsg(String.valueOf(telegramChatId), responseBuilder.toString());
+                        }
                         LoggerUtil.logInfo(telegramChatId, "Пользователь выполнил команду: " + command);
                     }
                 } else {
@@ -318,7 +334,11 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                     StringBuilder responseBuilder = new StringBuilder();
                     action.accept(String.valueOf(telegramChatId), responseBuilder);
-                    sendMsgWithInlineKeyboard(String.valueOf(telegramChatId), responseBuilder.toString(), InlineKeyboardManager.getSkipButtonKeyboard());
+                    if (command.equals("/editprofile")) {
+                        sendMsgWithInlineKeyboard(String.valueOf(telegramChatId), responseBuilder.toString(), InlineKeyboardManager.getSkipButtonKeyboard());
+                    } else {
+                        sendMsg(String.valueOf(telegramChatId), responseBuilder.toString());
+                    }
                     LoggerUtil.logInfo(telegramChatId, "Пользователь выполнил команду: " + command);
                 }
             } catch (SQLException e) {
@@ -329,12 +349,13 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
 
+
     public static InlineKeyboardMarkup getSkipButtonKeyboard() {
         InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboardRows = new ArrayList<>();
 
         InlineKeyboardButton skipButton = new InlineKeyboardButton();
-        skipButton.setText(Icon.NOT.get());
+        skipButton.setText(Icon.SKIP.get());
         skipButton.setCallbackData("skip");
         List<InlineKeyboardButton> row = new ArrayList<>();
         row.add(skipButton);
@@ -398,6 +419,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         stateMessageMap.put(UserState.EDIT_PROFILE_HEIGHT, "Пожалуйста, введите новое значение для роста (в см):");
         stateMessageMap.put(UserState.EDIT_PROFILE_WEIGHT, "Пожалуйста, введите новое значение для веса (в кг):");
     }
+
 
     private UserState getNextState(UserState currentState) {
         return stateTransitionMap.getOrDefault(currentState, null);

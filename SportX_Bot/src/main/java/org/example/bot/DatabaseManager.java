@@ -591,10 +591,8 @@ public class DatabaseManager {
         stateHandlers.put(UserState.EDIT_PROFILE_PASSWORD, (userId, input) -> {
             try {
                 handleEditPassword(userId, input);
-                bot.sendMsg(String.valueOf(userId), "Введите новое значение для никнейма:");
                 setUserState(userId, UserState.EDIT_PROFILE_NICKNAME);
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании пароля. Попробуйте позже.");
                 removeUserState(userId);
                 e.printStackTrace();
             }
@@ -603,10 +601,8 @@ public class DatabaseManager {
         stateHandlers.put(UserState.EDIT_PROFILE_NICKNAME, (userId, input) -> {
             try {
                 handleEditNickname(userId, input);
-                bot.sendMsg(String.valueOf(userId), "Введите новое значение для возраста:");
                 setUserState(userId, UserState.EDIT_PROFILE_AGE);
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании никнейма. Попробуйте позже.");
                 removeUserState(userId);
                 e.printStackTrace();
             }
@@ -615,12 +611,9 @@ public class DatabaseManager {
         stateHandlers.put(UserState.EDIT_PROFILE_AGE, (userId, input) -> {
             try {
                 handleEditAge(userId, input);
-                bot.sendMsg(String.valueOf(userId), "Введите новое значение для роста (в см):");
                 setUserState(userId, UserState.EDIT_PROFILE_HEIGHT);
             } catch (NumberFormatException e) {
-                bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный возраст.");
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании возраста. Попробуйте позже.");
                 removeUserState(userId);
                 e.printStackTrace();
             }
@@ -629,12 +622,9 @@ public class DatabaseManager {
         stateHandlers.put(UserState.EDIT_PROFILE_HEIGHT, (userId, input) -> {
             try {
                 handleEditHeight(userId, input);
-                bot.sendMsg(String.valueOf(userId), "Введите новое значение для веса (в кг):");
                 setUserState(userId, UserState.EDIT_PROFILE_WEIGHT);
             } catch (NumberFormatException e) {
-                bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный рост.");
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании роста. Попробуйте позже.");
                 removeUserState(userId);
                 e.printStackTrace();
             }
@@ -643,12 +633,9 @@ public class DatabaseManager {
         stateHandlers.put(UserState.EDIT_PROFILE_WEIGHT, (userId, input) -> {
             try {
                 handleEditWeight(userId, input);
-                bot.sendMsg(String.valueOf(userId), "Ваш профиль успешно обновлен!");
                 removeUserState(userId);
             } catch (NumberFormatException e) {
-                bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный вес.");
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании веса. Попробуйте позже.");
                 removeUserState(userId);
                 e.printStackTrace();
             }
