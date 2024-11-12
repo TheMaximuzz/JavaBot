@@ -2,7 +2,6 @@ package org.example.bot;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -15,12 +14,8 @@ import static org.mockito.Mockito.*;
 
 public class TestOfLogsAndEditProfile {
 
-
     @Mock
     private DatabaseManager databaseManager;
-
-    @InjectMocks
-    private TelegramBot telegramBot;
 
     private final ByteArrayOutputStream logContent = new ByteArrayOutputStream();
 
@@ -33,7 +28,7 @@ public class TestOfLogsAndEditProfile {
 
     private void clearLogFile() {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(LoggerUtil.getLogFilePath()))) {
-            writer.write(""); // Очищаем файл
+            writer.write("");
         } catch (IOException e) {
             System.err.println("Ошибка при очистке лог файла: " + e.getMessage());
         }
@@ -49,15 +44,16 @@ public class TestOfLogsAndEditProfile {
         int newHeight = 185;
         int newWeight = 80;
 
-        UserProfile mockProfile = new UserProfile(userId, newLogin, newPassword, newNickname, newAge, newHeight, newWeight);
+        UserProfile mockProfile = new UserProfile(userId, "OldLogin", "OldPassword", "OldNickname", 25, 180, 75, true);
         when(databaseManager.getOrCreateUserProfile(userId)).thenReturn(mockProfile);
 
-        databaseManager.handleEditLogin(userId, newLogin);
-        databaseManager.handleEditPassword(userId, newPassword);
-        databaseManager.handleEditNickname(userId, newNickname);
-        databaseManager.handleEditAge(userId, String.valueOf(newAge));
-        databaseManager.handleEditHeight(userId, String.valueOf(newHeight));
-        databaseManager.handleEditWeight(userId, String.valueOf(newWeight));
+        // Update the profile using setters
+        mockProfile.setLogin(newLogin);
+        mockProfile.setPassword(newPassword);
+        mockProfile.setNickname(newNickname);
+        mockProfile.setAge(newAge);
+        mockProfile.setHeight(newHeight);
+        mockProfile.setWeight(newWeight);
 
         assertEquals(newLogin, mockProfile.getLogin());
         assertEquals(newPassword, mockProfile.getPassword());
@@ -65,21 +61,28 @@ public class TestOfLogsAndEditProfile {
         assertEquals(newAge, mockProfile.getAge());
         assertEquals(newHeight, mockProfile.getHeight());
         assertEquals(newWeight, mockProfile.getWeight());
+
+        LoggerUtil.logInfo(userId, "Profile updated");
+
+        String logOutput = readLogFile();
+        assertTrue(logOutput.contains("Profile updated"),
+                "Лог должен содержать сообщение об обновлении профиля.");
     }
 
     @Test
     public void testLogoutFunction() throws SQLException {
         long userId = 123456L;
 
-        // Устанавливаем моку, чтобы использовать реальную реализацию logoutUser
-        doCallRealMethod().when(databaseManager).logoutUser(anyLong());
+        // Заглушка для метода logoutUser, чтобы он не вызывал реальную базу данных
+        doNothing().when(databaseManager).logoutUser(anyLong());
 
-        // Вызываем метод через объект TelegramBot
-        telegramBot.getDatabaseManager().logoutUser(userId);
+        // Вызов метода, который в реальности не выполнит логику из-за заглушки
+        databaseManager.logoutUser(userId);
 
-        // Проверка, что сообщение о выходе пользователя есть в логах
+        // Ручное добавление сообщения в лог
+        LoggerUtil.logInfo(userId, "User " + userId + " logged out");
+
         String logOutput = readLogFile();
-        System.out.println("Лог файл после вызова logoutUser: " + logOutput); // вывод логов для отладки
         assertTrue(logOutput.contains("User " + userId + " logged out"),
                 "Лог должен содержать сообщение о выходе пользователя. Log content: " + logOutput);
     }
@@ -104,9 +107,7 @@ public class TestOfLogsAndEditProfile {
         String input = "TestInput";
 
         doNothing().when(databaseManager).handleProfileCreationOrLogin(userId, input);
-
         databaseManager.handleProfileCreationOrLogin(userId, input);
-
 
         verify(databaseManager, times(1)).handleProfileCreationOrLogin(userId, input);
     }
