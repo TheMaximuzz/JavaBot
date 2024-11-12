@@ -14,6 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.BiConsumer;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 
 
 public class DatabaseManager {
@@ -26,6 +29,8 @@ public class DatabaseManager {
     private Map<Long, UserState> userStates = new HashMap<>();
     private Map<UserState, BiConsumer<Long, String>> stateHandlers = new HashMap<>();
     private TelegramBot bot;
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
 
     public DatabaseManager(TelegramBot bot) {
         this.bot = bot;
@@ -68,7 +73,7 @@ public class DatabaseManager {
         try (PreparedStatement statement = connection.prepareStatement(query)) {
             statement.setLong(1, userId);
             statement.setString(2, login);
-            statement.setString(3, password);
+            statement.setString(3, passwordEncoder.encode(password));
             statement.setString(4, nickname);
             statement.setInt(5, age);
             statement.setInt(6, height);
@@ -102,19 +107,22 @@ public class DatabaseManager {
 
 
     public long validateLogin(String login, String password) throws SQLException {
-        String query = "SELECT user_id FROM user_profiles WHERE login = ? AND password = ?";
+        String query = "SELECT user_id, password FROM user_profiles WHERE login = ?";
         connect();
         try (PreparedStatement statement = connection.prepareStatement(query)) {
             statement.setString(1, login);
-            statement.setString(2, password);
             ResultSet resultSet = statement.executeQuery();
             if (resultSet.next()) {
-                return resultSet.getLong("user_id");
+                long userId = resultSet.getLong("user_id");
+                String storedPassword = resultSet.getString("password");
+                if (passwordEncoder.matches(password, storedPassword)) { // Проверяем пароль
+                    return userId;
+                }
             }
         } finally {
             disconnect();
         }
-        return -1; // Возвращаем -1, если пользователь не найден
+        return -1;
     }
 
 
@@ -127,17 +135,17 @@ public class DatabaseManager {
 
     public void handlePassword(long userId, String input) throws SQLException {
         UserProfile profile = getOrCreateUserProfile(userId);
-        profile.setPassword(input);
+        profile.setPassword(passwordEncoder.encode(input));
         updateUserProfile(profile);
     }
 
     public void handleLoginPassword(long telegramChatId, String input) throws SQLException {
         UserProfile profile = getOrCreateUserProfile(telegramChatId);
-        profile.setPassword(input);
+        profile.setPassword(passwordEncoder.encode(input));
 
-        long userId = validateLogin(profile.getLogin(), profile.getPassword());
+        long userId = validateLogin(profile.getLogin(), input);
         if (userId != -1) {
-            createSession(userId, telegramChatId); // Создаем новую сессию
+            createSession(userId, telegramChatId);
             bot.sendMsg(String.valueOf(telegramChatId), "Вы успешно вошли в аккаунт!");
             userStates.remove(telegramChatId);
         } else {
@@ -145,8 +153,6 @@ public class DatabaseManager {
             userStates.put(telegramChatId, UserState.LOGIN_LOGIN);
         }
     }
-
-
 
     public void createSession(long userId, long telegramChatId) throws SQLException {
         connect();
@@ -330,7 +336,7 @@ public class DatabaseManager {
         connect();
         String query = "UPDATE user_profiles SET password = ? WHERE user_id = ?";
         try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setString(1, password);
+            statement.setString(1, passwordEncoder.encode(password));
             statement.setLong(2, userId);
             statement.executeUpdate();
         } finally {
