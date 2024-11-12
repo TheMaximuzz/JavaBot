@@ -182,11 +182,19 @@ public class TelegramBot extends TelegramLongPollingBot {
         });
 
         registerCommand("/editprofile", "Редактировать профиль", (chatId, builder) -> {
-            builder.append("Пожалуйста, введите новое значение для логина:");
-            databaseManager.setUserState(Long.parseLong(chatId), UserState.EDIT_PROFILE_LOGIN);
-            LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал редактирование профиля.");
+            try {
+                if (databaseManager.isUserLoggedIn(Long.parseLong(chatId))) {
+                    builder.append("Выберите, что хотите изменить:");
+                    sendMsgWithInlineKeyboard(chatId, builder.toString(), InlineKeyboardManager.getEditProfileKeyboard());
+                    databaseManager.setUserState(Long.parseLong(chatId), UserState.EDIT_PROFILE_LOGIN);
+                } else {
+                    builder.append("Ошибка. Зарегистрируйтесь или войдите в аккаунт.");
+                }
+            } catch (SQLException e) {
+                builder.append("Ошибка при получении профиля. Попробуйте позже.");
+                LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при получении профиля: " + e.getMessage());
+            }
         });
-
     }
 
     @Override
@@ -231,18 +239,21 @@ public class TelegramBot extends TelegramLongPollingBot {
             String callbackData = callbackQuery.getData();
             long userId = callbackQuery.getMessage().getChatId();
 
-            if (callbackData.equals("skip")) {
-                UserState currentState = databaseManager.getUserState(userId);
-                if (currentState != null) {
-                    UserState nextState = getNextState(currentState);
-                    if (nextState != null) {
-                        databaseManager.setUserState(userId, nextState);
-                        String message = getMessageForState(nextState);
-                        sendMsgWithInlineKeyboard(String.valueOf(userId), message, InlineKeyboardManager.getSkipButtonKeyboard());
-                    } else {
-                        sendMsg(String.valueOf(userId), "Редактирование профиля завершено.");
-                        databaseManager.removeUserState(userId);
-                    }
+            if (callbackData.startsWith("edit_")) {
+                Map<String, UserState> editStateMap = Map.of(
+                        "edit_login", UserState.EDIT_PROFILE_LOGIN,
+                        "edit_password", UserState.EDIT_PROFILE_PASSWORD,
+                        "edit_nickname", UserState.EDIT_PROFILE_NICKNAME,
+                        "edit_age", UserState.EDIT_PROFILE_AGE,
+                        "edit_height", UserState.EDIT_PROFILE_HEIGHT,
+                        "edit_weight", UserState.EDIT_PROFILE_WEIGHT
+                );
+
+                UserState state = editStateMap.get(callbackData);
+                if (state != null) {
+                    databaseManager.setUserState(userId, state);
+                    String message = getMessageForState(state);
+                    sendMsg(String.valueOf(userId), message);
                 }
             } else if (databaseManager.getUserState(userId) == UserState.SELECT_COURSE) {
                 try {
@@ -281,6 +292,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         }
     }
+
 
 
     private void handleCommand(long userId, String command, String text) {
@@ -322,6 +334,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
 
+
     // Метод для отправки сообщений
     public void sendMsg(String chatId, String text) {
         SendMessage message = new SendMessage();
@@ -332,19 +345,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             execute(message);
         } catch (TelegramApiException e) {
             LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при отправке сообщения: " + e.getMessage());
-        }
-    }
-
-    // Метод для отправки сообщений с клавиатурой
-    public void sendMsgWithKeyboard(String chatId, String text, ReplyKeyboardMarkup keyboardMarkup) {
-        SendMessage message = new SendMessage();
-        message.setChatId(chatId);
-        message.setText(text);
-        message.setReplyMarkup(keyboardMarkup);
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при отправке сообщения с клавиатурой: " + e.getMessage());
         }
     }
 

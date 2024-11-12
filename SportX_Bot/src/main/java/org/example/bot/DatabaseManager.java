@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.BiConsumer;
 
+
 public class DatabaseManager {
 
     private Connection connection;
@@ -114,33 +115,6 @@ public class DatabaseManager {
             disconnect();
         }
         return -1; // Возвращаем -1, если пользователь не найден
-    }
-
-
-    public void updateTelegramChatId(long userId, long telegramChatId) throws SQLException {
-        connect();
-        String query = "UPDATE user_profiles SET telegram_chat_id = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setLong(1, telegramChatId);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        } finally {
-            disconnect();
-        }
-    }
-
-
-
-    public void updateUserLoginStatus(long userId, boolean isLoggedIn) throws SQLException {
-        String query = "UPDATE user_profiles SET is_logged_in = ? WHERE user_id = ?";
-        connect();
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setBoolean(1, isLoggedIn);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        } finally {
-            disconnect();
-        }
     }
 
 
@@ -325,6 +299,94 @@ public class DatabaseManager {
         return result;
     }
 
+
+    public void updateTelegramChatId(long userId, long telegramChatId) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET telegram_chat_id = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setLong(1, telegramChatId);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+
+
+    public void updateUserLogin(long userId, String login) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET login = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, login);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserPassword(long userId, String password) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET password = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, password);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserNickname(long userId, String nickname) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET nickname = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, nickname);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserAge(long userId, int age) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET age = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setInt(1, age);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserHeight(long userId, int height) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET height = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setInt(1, height);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserWeight(long userId, int weight) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET weight = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setInt(1, weight);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+
     public void updateUserProfile(UserProfile profile) throws SQLException {
         connect();
         String query = "UPDATE user_profiles SET login = ?, password = ?, nickname = ?, age = ?, height = ?, weight = ? WHERE user_id = ?";
@@ -496,136 +558,79 @@ public class DatabaseManager {
 
         stateHandlers.put(UserState.EDIT_PROFILE_LOGIN, (userId, input) -> {
             try {
-                handleEditLogin(userId, input);
-                bot.sendMsgWithInlineKeyboard(String.valueOf(userId), "Введите новое значение для пароля:", InlineKeyboardManager.getSkipButtonKeyboard());
-                setUserState(userId, UserState.EDIT_PROFILE_PASSWORD);
+                updateUserLogin(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Логин обновлен.");
+                userStates.remove(userId); // Удаляем состояние пользователя после изменения поля
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании логина. Попробуйте позже.");
-                removeUserState(userId);
+                bot.sendMsg(String.valueOf(userId), "Ошибка при обновлении логина. Попробуйте позже.");
                 e.printStackTrace();
             }
         });
 
         stateHandlers.put(UserState.EDIT_PROFILE_PASSWORD, (userId, input) -> {
             try {
-                handleEditPassword(userId, input);
-                bot.sendMsgWithInlineKeyboard(String.valueOf(userId), "Введите новое значение для никнейма:", InlineKeyboardManager.getSkipButtonKeyboard());
-                setUserState(userId, UserState.EDIT_PROFILE_NICKNAME);
+                updateUserPassword(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Пароль обновлен.");
+                userStates.remove(userId); // Удаляем состояние пользователя после изменения поля
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании пароля. Попробуйте позже.");
-                removeUserState(userId);
+                bot.sendMsg(String.valueOf(userId), "Ошибка при обновлении пароля. Попробуйте позже.");
                 e.printStackTrace();
             }
         });
 
         stateHandlers.put(UserState.EDIT_PROFILE_NICKNAME, (userId, input) -> {
             try {
-                handleEditNickname(userId, input);
-                bot.sendMsgWithInlineKeyboard(String.valueOf(userId), "Введите новое значение для возраста:", InlineKeyboardManager.getSkipButtonKeyboard());
-                setUserState(userId, UserState.EDIT_PROFILE_AGE);
+                updateUserNickname(userId, input);
+                bot.sendMsg(String.valueOf(userId), "Никнейм обновлен.");
+                userStates.remove(userId); // Удаляем состояние пользователя после изменения поля
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании никнейма. Попробуйте позже.");
-                removeUserState(userId);
+                bot.sendMsg(String.valueOf(userId), "Ошибка при обновлении никнейма. Попробуйте позже.");
                 e.printStackTrace();
             }
         });
 
         stateHandlers.put(UserState.EDIT_PROFILE_AGE, (userId, input) -> {
             try {
-                handleEditAge(userId, input);
-                bot.sendMsgWithInlineKeyboard(String.valueOf(userId), "Введите новое значение для роста (в см):", InlineKeyboardManager.getSkipButtonKeyboard());
-                setUserState(userId, UserState.EDIT_PROFILE_HEIGHT);
+                updateUserAge(userId, Integer.parseInt(input));
+                bot.sendMsg(String.valueOf(userId), "Возраст обновлен.");
+                userStates.remove(userId); // Удаляем состояние пользователя после изменения поля
             } catch (NumberFormatException e) {
                 bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный возраст.");
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании возраста. Попробуйте позже.");
-                removeUserState(userId);
+                bot.sendMsg(String.valueOf(userId), "Ошибка при обновлении возраста. Попробуйте позже.");
                 e.printStackTrace();
             }
         });
 
         stateHandlers.put(UserState.EDIT_PROFILE_HEIGHT, (userId, input) -> {
             try {
-                handleEditHeight(userId, input);
-                bot.sendMsgWithInlineKeyboard(String.valueOf(userId), "Введите новое значение для веса (в кг):", InlineKeyboardManager.getSkipButtonKeyboard());
-                setUserState(userId, UserState.EDIT_PROFILE_WEIGHT);
+                updateUserHeight(userId, Integer.parseInt(input));
+                bot.sendMsg(String.valueOf(userId), "Рост обновлен.");
+                userStates.remove(userId); // Удаляем состояние пользователя после изменения поля
             } catch (NumberFormatException e) {
                 bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный рост.");
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании роста. Попробуйте позже.");
-                removeUserState(userId);
+                bot.sendMsg(String.valueOf(userId), "Ошибка при обновлении роста. Попробуйте позже.");
                 e.printStackTrace();
             }
         });
 
         stateHandlers.put(UserState.EDIT_PROFILE_WEIGHT, (userId, input) -> {
             try {
-                handleEditWeight(userId, input);
-                bot.sendMsgWithInlineKeyboard(String.valueOf(userId), "Ваш профиль успешно обновлен!", null);
-                removeUserState(userId);
+                updateUserWeight(userId, Integer.parseInt(input));
+                bot.sendMsg(String.valueOf(userId), "Вес обновлен.");
+                userStates.remove(userId); // Удаляем состояние пользователя после изменения поля
             } catch (NumberFormatException e) {
                 bot.sendMsg(String.valueOf(userId), "Пожалуйста, введите корректный вес.");
             } catch (SQLException e) {
-                bot.sendMsg(String.valueOf(userId), "Ошибка при редактировании веса. Попробуйте позже.");
-                removeUserState(userId);
+                bot.sendMsg(String.valueOf(userId), "Ошибка при обновлении веса. Попробуйте позже.");
                 e.printStackTrace();
             }
         });
+
+
     }
 
-    private void handleEditLogin(long userId, String input) throws SQLException {
-        String query = "UPDATE user_profiles SET login = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setString(1, input);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        }
-    }
-
-    private void handleEditPassword(long userId, String input) throws SQLException {
-        String query = "UPDATE user_profiles SET password = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setString(1, input);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        }
-    }
-
-    private void handleEditNickname(long userId, String input) throws SQLException {
-        String query = "UPDATE user_profiles SET nickname = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setString(1, input);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        }
-    }
-
-    private void handleEditAge(long userId, String input) throws SQLException {
-        String query = "UPDATE user_profiles SET age = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setInt(1, Integer.parseInt(input));
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        }
-    }
-
-    private void handleEditHeight(long userId, String input) throws SQLException {
-        String query = "UPDATE user_profiles SET height = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setInt(1, Integer.parseInt(input));
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        }
-    }
-
-    private void handleEditWeight(long userId, String input) throws SQLException {
-        String query = "UPDATE user_profiles SET weight = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setInt(1, Integer.parseInt(input));
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        }
-    }
 
     public void setUserState(long userId, UserState state) {
         userStates.put(userId, state);

@@ -58,18 +58,34 @@ public class InlineKeyboardManager {
     }
 
 
-    public static InlineKeyboardMarkup getSkipButtonKeyboard() {
+    public static InlineKeyboardMarkup getEditProfileKeyboard() {
         InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> keyboardRows = new ArrayList<>();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
 
-        InlineKeyboardButton skipButton = new InlineKeyboardButton();
-        skipButton.setText(Icon.SKIP.get());
-        skipButton.setCallbackData("skip");
-        List<InlineKeyboardButton> row = new ArrayList<>();
-        row.add(skipButton);
-        keyboardRows.add(row);
+        List<InlineKeyboardButton> row1 = new ArrayList<>();
+        row1.add(createButton("Логин", "edit_login"));
+        row1.add(createButton("Пароль", "edit_password"));
 
-        keyboardMarkup.setKeyboard(keyboardRows);
+        List<InlineKeyboardButton> row2 = new ArrayList<>();
+        row2.add(createButton("Никнейм", "edit_nickname"));
+        row2.add(createButton("Возраст", "edit_age"));
+
+        List<InlineKeyboardButton> row3 = new ArrayList<>();
+        row3.add(createButton("Рост", "edit_height"));
+        row3.add(createButton("Вес", "edit_weight"));
+
+        keyboard.add(row1);
+        keyboard.add(row2);
+        keyboard.add(row3);
+
+        keyboardMarkup.setKeyboard(keyboard);
         return keyboardMarkup;
+    }
+
+    private static InlineKeyboardButton createButton(String text, String callbackData) {
+        InlineKeyboardButton button = new InlineKeyboardButton();
+        button.setText(text);
+        button.setCallbackData(callbackData);
+        return button;
     }
 }
