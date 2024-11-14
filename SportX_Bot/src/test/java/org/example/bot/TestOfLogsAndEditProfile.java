@@ -47,7 +47,6 @@ public class TestOfLogsAndEditProfile {
         UserProfile mockProfile = new UserProfile(userId, "OldLogin", "OldPassword", "OldNickname", 25, 180, 75, true);
         when(databaseManager.getOrCreateUserProfile(userId)).thenReturn(mockProfile);
 
-        // Update the profile using setters
         mockProfile.setLogin(newLogin);
         mockProfile.setPassword(newPassword);
         mockProfile.setNickname(newNickname);
@@ -73,13 +72,11 @@ public class TestOfLogsAndEditProfile {
     public void testLogoutFunction() throws SQLException {
         long userId = 123456L;
 
-        // Заглушка для метода logoutUser, чтобы он не вызывал реальную базу данных
+        // заглушка для logoutUser, чтобы он не вызывал реальную базу данных
         doNothing().when(databaseManager).logoutUser(anyLong());
 
-        // Вызов метода, который в реальности не выполнит логику из-за заглушки
         databaseManager.logoutUser(userId);
 
-        // Ручное добавление сообщения в лог
         LoggerUtil.logInfo(userId, "User " + userId + " logged out");
 
         String logOutput = readLogFile();
