@@ -10,6 +10,10 @@ public class LoggerUtil {
 
     private static final String LOG_FILE_PATH = "bot_activity.log";
 
+    public static String getLogFilePath() {
+        return LOG_FILE_PATH;
+    }
+
     // Метод для логирования информации
     public static void logInfo(long userId, String message) {
         log("INFO", userId, message);

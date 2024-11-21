@@ -240,7 +240,7 @@ public class DatabaseManager {
         updateUserProfile(profile);
     }
 
-    private UserProfile getOrCreateUserProfile(long userId) {
+    protected UserProfile getOrCreateUserProfile(long userId) {
         return userProfiles.computeIfAbsent(userId, k -> new UserProfile());
     }
 
