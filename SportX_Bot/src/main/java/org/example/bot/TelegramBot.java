@@ -154,7 +154,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             try {
                 List<Workout> workouts = databaseManager.getWorkoutsWithCompletionStatus(Long.parseLong(chatId));
                 InlineKeyboardMarkup keyboardMarkup = InlineKeyboardManager.getWorkoutSelectionKeyboard(workouts);
-                sendMsgWithInlineKeyboard(chatId, "Пожалуйста, выберите тренировку:", keyboardMarkup);
+                sendMsgWithInlineKeyboard(chatId, "Пожалуйста, выберите курс тренировок", keyboardMarkup);
                 LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал просмотр упражнений в тренировке.");
             } catch (SQLException e) {
                 builder.append("Ошибка при получении тренировок. Попробуйте позже.");
