@@ -10,7 +10,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
 
-
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,7 +19,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.BiConsumer;
 import java.util.Arrays;
-
 
 import java.sql.SQLException;
 
@@ -41,7 +39,8 @@ public class TelegramBot extends TelegramLongPollingBot {
             "/selectcourse",
             "/viewworkouts",
             "/viewexercises",
-            "/logout"
+            "/logout",
+            "/editprofile"
     );
 
     public TelegramBot() {
@@ -293,8 +292,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-
-
     private void handleCommand(long userId, String command, String text) {
         UserState userState = databaseManager.getUserState(userId);
 
@@ -332,7 +329,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         }
     }
-
 
 
     // Метод для отправки сообщений
@@ -443,6 +439,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private static final Map<UserState, String> messageMap = new HashMap<UserState, String>() {{
         put(UserState.EDIT_PROFILE_PASSWORD, "Введите новое значение для пароля:");
+        put(UserState.EDIT_PROFILE_LOGIN, "Введите новое значение для логина:");
         put(UserState.EDIT_PROFILE_NICKNAME, "Введите новое значение для никнейма:");
         put(UserState.EDIT_PROFILE_AGE, "Введите новое значение для возраста:");
         put(UserState.EDIT_PROFILE_HEIGHT, "Введите новое значение для роста (в см):");

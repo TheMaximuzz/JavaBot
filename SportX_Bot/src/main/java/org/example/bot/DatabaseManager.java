@@ -18,9 +18,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 
-
 public class DatabaseManager {
 
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private Connection connection;
     private String url;
     private String username;
@@ -29,8 +29,6 @@ public class DatabaseManager {
     private Map<Long, UserState> userStates = new HashMap<>();
     private Map<UserState, BiConsumer<Long, String>> stateHandlers = new HashMap<>();
     private TelegramBot bot;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-
 
     public DatabaseManager(TelegramBot bot) {
         this.bot = bot;
@@ -73,7 +71,7 @@ public class DatabaseManager {
         try (PreparedStatement statement = connection.prepareStatement(query)) {
             statement.setLong(1, userId);
             statement.setString(2, login);
-            statement.setString(3, passwordEncoder.encode(password));
+            statement.setString(3, password);
             statement.setString(4, nickname);
             statement.setInt(5, age);
             statement.setInt(6, height);
@@ -126,6 +124,33 @@ public class DatabaseManager {
     }
 
 
+    public void updateTelegramChatId(long userId, long telegramChatId) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET telegram_chat_id = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setLong(1, telegramChatId);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+
+
+    public void updateUserLoginStatus(long userId, boolean isLoggedIn) throws SQLException {
+        String query = "UPDATE user_profiles SET is_logged_in = ? WHERE user_id = ?";
+        connect();
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setBoolean(1, isLoggedIn);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+
 
     public void handleLogin(long userId, String input) throws SQLException {
         UserProfile profile = getOrCreateUserProfile(userId);
@@ -153,6 +178,7 @@ public class DatabaseManager {
             userStates.put(telegramChatId, UserState.LOGIN_LOGIN);
         }
     }
+
 
     public void createSession(long userId, long telegramChatId) throws SQLException {
         connect();
@@ -305,94 +331,6 @@ public class DatabaseManager {
         return result;
     }
 
-
-    public void updateTelegramChatId(long userId, long telegramChatId) throws SQLException {
-        connect();
-        String query = "UPDATE user_profiles SET telegram_chat_id = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setLong(1, telegramChatId);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        } finally {
-            disconnect();
-        }
-    }
-
-
-
-    public void updateUserLogin(long userId, String login) throws SQLException {
-        connect();
-        String query = "UPDATE user_profiles SET login = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setString(1, login);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        } finally {
-            disconnect();
-        }
-    }
-
-    public void updateUserPassword(long userId, String password) throws SQLException {
-        connect();
-        String query = "UPDATE user_profiles SET password = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setString(1, passwordEncoder.encode(password));
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        } finally {
-            disconnect();
-        }
-    }
-
-    public void updateUserNickname(long userId, String nickname) throws SQLException {
-        connect();
-        String query = "UPDATE user_profiles SET nickname = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setString(1, nickname);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        } finally {
-            disconnect();
-        }
-    }
-
-    public void updateUserAge(long userId, int age) throws SQLException {
-        connect();
-        String query = "UPDATE user_profiles SET age = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setInt(1, age);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        } finally {
-            disconnect();
-        }
-    }
-
-    public void updateUserHeight(long userId, int height) throws SQLException {
-        connect();
-        String query = "UPDATE user_profiles SET height = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setInt(1, height);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        } finally {
-            disconnect();
-        }
-    }
-
-    public void updateUserWeight(long userId, int weight) throws SQLException {
-        connect();
-        String query = "UPDATE user_profiles SET weight = ? WHERE user_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
-            statement.setInt(1, weight);
-            statement.setLong(2, userId);
-            statement.executeUpdate();
-        } finally {
-            disconnect();
-        }
-    }
-
-
     public void updateUserProfile(UserProfile profile) throws SQLException {
         connect();
         String query = "UPDATE user_profiles SET login = ?, password = ?, nickname = ?, age = ?, height = ?, weight = ? WHERE user_id = ?";
@@ -425,8 +363,8 @@ public class DatabaseManager {
             try {
                 UserProfile profile = getUserProfile(userId);
                 createUserProfile(userId, profile.getLogin(), profile.getPassword(), profile.getNickname(), profile.getAge(), profile.getHeight(), profile.getWeight(), userId);
-                createSession(userId, userId); // Создаем новую сессию
-                userStates.remove(userId); // Удаляем состояние пользователя после завершения создания профиля
+                createSession(userId, userId);
+                userStates.remove(userId);
             } catch (SQLException e) {
                 bot.sendMsg(String.valueOf(userId), "Ошибка при сохранении профиля. Попробуйте позже.");
                 LoggerUtil.logError(userId, "Ошибка при сохранении профиля: " + e.getMessage());
@@ -437,7 +375,6 @@ public class DatabaseManager {
 
 
     private void initializeStateHandlers() {
-
         stateHandlers.put(UserState.LOGIN_LOGIN, (userId, input) -> {
             try {
                 handleLogin(userId, input);
@@ -575,7 +512,7 @@ public class DatabaseManager {
 
         stateHandlers.put(UserState.EDIT_PROFILE_PASSWORD, (userId, input) -> {
             try {
-                updateUserPassword(userId, input);
+                updateUserPassword(userId, passwordEncoder.encode(input));
                 bot.sendMsg(String.valueOf(userId), "Пароль обновлен.");
                 userStates.remove(userId); // Удаляем состояние пользователя после изменения поля
             } catch (SQLException e) {
@@ -633,8 +570,6 @@ public class DatabaseManager {
                 e.printStackTrace();
             }
         });
-
-
     }
 
 
@@ -690,6 +625,78 @@ public class DatabaseManager {
 
         disconnect();
         return courses;
+    }
+
+    public void updateUserLogin(long userId, String login) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET login = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, login);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserPassword(long userId, String password) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET password = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, password);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserNickname(long userId, String nickname) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET nickname = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, nickname);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserAge(long userId, int age) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET age = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setInt(1, age);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserHeight(long userId, int height) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET height = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setInt(1, height);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
+    }
+
+    public void updateUserWeight(long userId, int weight) throws SQLException {
+        connect();
+        String query = "UPDATE user_profiles SET weight = ? WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setInt(1, weight);
+            statement.setLong(2, userId);
+            statement.executeUpdate();
+        } finally {
+            disconnect();
+        }
     }
 
     public void updateUserCourse(long userId, int courseId) throws SQLException {
@@ -915,6 +922,7 @@ public class DatabaseManager {
                 UserProfile profile = getUserProfile(telegramChatId);
                 createUserProfile(telegramChatId, profile.getLogin(), profile.getPassword(), profile.getNickname(), profile.getAge(), profile.getHeight(), profile.getWeight(), telegramChatId);
                 createSession(telegramChatId, telegramChatId); // Создаем новую сессию
+                bot.sendMsg(String.valueOf(telegramChatId), "Ваш профиль успешно создан и вы вошли в аккаунт!");
                 userStates.remove(telegramChatId); // Удаляем состояние пользователя после завершения создания профиля
             } catch (SQLException e) {
                 bot.sendMsg(String.valueOf(telegramChatId), "Ошибка при сохранении профиля. Попробуйте позже.");

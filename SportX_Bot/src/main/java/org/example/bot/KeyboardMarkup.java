@@ -62,6 +62,7 @@ public class KeyboardMarkup {
 
         KeyboardRow row7 = new KeyboardRow();
         row7.add(new KeyboardButton("/editprofile"));
+        row7.add(new KeyboardButton("/logout"));
 
         keyboardRows.add(row1);
         keyboardRows.add(row2);
