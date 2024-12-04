@@ -1,5 +1,8 @@
 package org.example.bot;
 
+import org.example.recipes.RecipesCommand;
+import org.example.recipes.SpoonacularAPI;
+
 import java.sql.SQLException;
 import java.util.List;
 

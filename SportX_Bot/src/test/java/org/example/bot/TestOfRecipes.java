@@ -1,8 +1,13 @@
 package org.example.bot;
 
+import org.example.recipes.RecipeParser;
+import org.example.recipes.RecipesCommand;
+import org.example.recipes.SpoonacularAPI;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import java.util.List;
+import static org.junit.jupiter.api.Assertions.*;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -73,6 +78,30 @@ public class TestOfRecipes {
 
         // правильность параметров
         verify(mockSpoonacularAPI).searchRecipes("tomatoes, cheese, chicken", "", "");
+    }
+
+    @Test
+    public void testParseRecipeTitles() {
+        RecipeParser parser = new RecipeParser();
+
+        // грязный JSON-ответ с лишними полями
+        String mockResponse = "{"
+                + "\"results\":["
+                + "{\"title\":\"Tomato Soup\",\"id\":123,\"extraField\":\"ignore this\"},"
+                + "{\"title\":\"Cheese Sandwich\",\"id\":124,\"nestedData\":{\"key\":\"value\"}},"
+                + "{\"id\":125,\"title\":\"Spaghetti\",\"unusedArray\":[1,2,3]}"
+                + "],"
+                + "\"offset\":0,\"number\":3,\"totalResults\":100"
+                + "}";
+
+        List<String> titles = parser.parseRecipeTitles(mockResponse);
+
+        // убеждаемся, что лишь нужные данные извлечены
+        assertNotNull(titles);
+        assertEquals(3, titles.size());
+        assertTrue(titles.contains("Tomato Soup"));
+        assertTrue(titles.contains("Cheese Sandwich"));
+        assertTrue(titles.contains("Spaghetti"));
     }
 
 }

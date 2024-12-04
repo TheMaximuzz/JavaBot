@@ -1,4 +1,4 @@
-package org.example.bot;
+package org.example.recipes;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
