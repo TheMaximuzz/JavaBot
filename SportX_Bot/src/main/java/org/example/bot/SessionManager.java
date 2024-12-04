@@ -3,10 +3,12 @@ package org.example.bot;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.logging.Logger;
 
 public class SessionManager {
 
     private final DatabaseConnection dbConnection;
+    private static final Logger logger = Logger.getLogger(SessionManager.class.getName());
 
     public SessionManager(DatabaseConnection dbConnection) {
         this.dbConnection = dbConnection;
@@ -23,6 +25,7 @@ public class SessionManager {
         }
 
         dbConnection.disconnect();
+        //logger.info("Сессия для " + telegramChatId + " активна: " + isActive);
         return isActive;
     }
 
@@ -33,10 +36,12 @@ public class SessionManager {
             statement.setLong(1, userId);
             statement.setLong(2, telegramChatId);
             statement.executeUpdate();
+            logger.info("Сессия создана для пользователя: " + userId + " с chatId: " + telegramChatId);
         } finally {
             dbConnection.disconnect();
         }
     }
+
 
     public void logoutUser(long telegramChatId) throws SQLException {
         dbConnection.connect();

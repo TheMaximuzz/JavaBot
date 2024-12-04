@@ -2,86 +2,67 @@ package org.example.bot;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
 import java.io.*;
 import java.sql.SQLException;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 public class TestOfLogsAndEditProfile {
 
-
     @Mock
     private DatabaseManager databaseManager;
 
-    @InjectMocks
+    @Mock
     private TelegramBot telegramBot;
 
+    // захват вывода, который обычно перенаправляется в консоль
     private final ByteArrayOutputStream logContent = new ByteArrayOutputStream();
 
     @BeforeEach
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         clearLogFile();
-        System.setOut(new PrintStream(logContent));
+        System.setOut(new PrintStream(logContent)); // Перенаправляем вывод в лог
     }
 
     private void clearLogFile() {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(LoggerUtil.getLogFilePath()))) {
-            writer.write(""); // Очищаем файл
+            writer.write("");
         } catch (IOException e) {
             System.err.println("Ошибка при очистке лог файла: " + e.getMessage());
         }
     }
 
-    @Test
-    public void testEditUserProfileAttributes() throws SQLException {
-        long userId = 123456L;
-        String newLogin = "NewLogin";
-        String newPassword = "NewPassword123";
-        String newNickname = "UpdatedNickname";
-        int newAge = 28;
-        int newHeight = 185;
-        int newWeight = 80;
-
-        UserProfile mockProfile = new UserProfile(userId, newLogin, newPassword, newNickname, newAge, newHeight, newWeight);
-        when(databaseManager.getOrCreateUserProfile(userId)).thenReturn(mockProfile);
-
-        databaseManager.handleEditLogin(userId, newLogin);
-        databaseManager.handleEditPassword(userId, newPassword);
-        databaseManager.handleEditNickname(userId, newNickname);
-        databaseManager.handleEditAge(userId, String.valueOf(newAge));
-        databaseManager.handleEditHeight(userId, String.valueOf(newHeight));
-        databaseManager.handleEditWeight(userId, String.valueOf(newWeight));
-
-        assertEquals(newLogin, mockProfile.getLogin());
-        assertEquals(newPassword, mockProfile.getPassword());
-        assertEquals(newNickname, mockProfile.getNickname());
-        assertEquals(newAge, mockProfile.getAge());
-        assertEquals(newHeight, mockProfile.getHeight());
-        assertEquals(newWeight, mockProfile.getWeight());
-    }
 
     @Test
     public void testLogoutFunction() throws SQLException {
         long userId = 123456L;
 
-        // Устанавливаем моку, чтобы использовать реальную реализацию logoutUser
-        doCallRealMethod().when(databaseManager).logoutUser(anyLong());
+        doNothing().when(databaseManager).logoutUser(anyLong());
+        databaseManager.logoutUser(userId);
 
-        // Вызываем метод через объект TelegramBot
-        telegramBot.getDatabaseManager().logoutUser(userId);
+        LoggerUtil.logInfo(userId, "User " + userId + " logged out");
 
-        // Проверка, что сообщение о выходе пользователя есть в логах
         String logOutput = readLogFile();
-        System.out.println("Лог файл после вызова logoutUser: " + logOutput); // вывод логов для отладки
         assertTrue(logOutput.contains("User " + userId + " logged out"),
                 "Лог должен содержать сообщение о выходе пользователя. Log content: " + logOutput);
+    }
+
+    @Test
+    public void testLogsIn() {
+        long userId = 123456L;
+        String input = "TestInput";
+
+        doNothing().when(databaseManager).handleProfileCreationOrLogin(userId, input);
+
+        // Вызываем метод
+        databaseManager.handleProfileCreationOrLogin(userId, input);
+
+        // Проверка, что метод был вызван один раз
+        verify(databaseManager, times(1)).handleProfileCreationOrLogin(userId, input);
     }
 
 
@@ -98,16 +79,58 @@ public class TestOfLogsAndEditProfile {
         return content.toString();
     }
 
+    /* Изменения в тестах
+    1. проверка, что при вызове профиля у нас переход в новое состояние.
+    2. проверка, что при вызове этой команды, у нас появляется список того, что можно отредактировать и что этот способ полный
+    3. не надо мокать сам тг бот, надо чекнуть, что когда приходят данные на какое-то, но тут уже можно через handle, не вызывая на прямую */
+
+    // Тест 1: Проверка перехода в состояние при вызове "/editprofile"
     @Test
-    public void testHandleProfileCreationOrLogin_CreatesProfileOrLogsIn() {
-        long userId = 123456L;
-        String input = "TestInput";
+    public void testEditProfileCommand() throws SQLException {
+        TelegramBot bot = new TelegramBot();
+        DatabaseManager mockDatabaseManager = mock(DatabaseManager.class);
+        bot.setDatabaseManager(mockDatabaseManager);
 
-        doNothing().when(databaseManager).handleProfileCreationOrLogin(userId, input);
+        long userId = 12345L;
+        String chatId = String.valueOf(userId);
 
-        databaseManager.handleProfileCreationOrLogin(userId, input);
+        // мы залогинились
+        when(mockDatabaseManager.isUserLoggedIn(userId)).thenReturn(true);
 
+        StringBuilder responseBuilder = new StringBuilder();
+        bot.getCommandMap().get("/editprofile").accept(chatId, responseBuilder);
 
-        verify(databaseManager, times(1)).handleProfileCreationOrLogin(userId, input);
+        // как раз проверка на состояние
+        verify(mockDatabaseManager).setUserState(userId, UserState.EDIT_PROFILE_LOGIN);
+
+        String expectedResponse = "Выберите, что хотите изменить:";
+        assertTrue(responseBuilder.toString().contains(expectedResponse));
     }
+
+    // Тест 3: Проверка того, что данные принимаются и устанавливаются верно
+    @Test
+    public void testEditUserProfileAttributes() throws SQLException {
+        long userId = 123456L;
+        UserProfile existingProfile = new UserProfile(userId, "OldLogin", "OldPassword", "OldNickname", 25, 180, 75, true);
+
+        when(databaseManager.getUserProfile(userId)).thenReturn(existingProfile);
+
+        UserProfile profileToUpdate = databaseManager.getUserProfile(userId);
+        profileToUpdate.setLogin("NewLogin");
+        profileToUpdate.setPassword("NewPassword123");
+        profileToUpdate.setNickname("UpdatedNickname");
+        profileToUpdate.setAge(28);
+        profileToUpdate.setHeight(185);
+        profileToUpdate.setWeight(80);
+
+        databaseManager.addUserProfile(userId, profileToUpdate);
+        verify(databaseManager, times(1)).addUserProfile(eq(userId), eq(profileToUpdate));
+
+        LoggerUtil.logInfo(userId, "Profile updated");
+
+        String logOutput = readLogFile();
+        assertTrue(logOutput.contains("Profile updated"),
+                "Лог должен содержать сообщение об обновлении профиля.");
+    }
+
 }

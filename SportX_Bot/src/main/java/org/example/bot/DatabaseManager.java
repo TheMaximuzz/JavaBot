@@ -6,7 +6,7 @@ import java.util.List;
 public class DatabaseManager {
 
     private final DatabaseConnection dbConnection;
-    private final UserProfileManager userProfileManager;
+    protected final UserProfileManager userProfileManager;
     private final CourseManager courseManager;
     private final SessionManager sessionManager;
     private final StateHandler stateHandler;
@@ -18,7 +18,9 @@ public class DatabaseManager {
         this.userProfileManager = new UserProfileManager(this.dbConnection);
         this.courseManager = new CourseManager(this.dbConnection);
         this.sessionManager = new SessionManager(this.dbConnection);
-        this.stateHandler = new StateHandler(this.bot, this.userProfileManager, this.sessionManager, this.courseManager, this.dbConnection);
+        SpoonacularAPI spoonacularAPI = new SpoonacularAPI(TelegramBot.getApiToken());
+        RecipesCommand recipesCommand = new RecipesCommand(spoonacularAPI, this);
+        this.stateHandler = new StateHandler(this.bot, this.userProfileManager, this.sessionManager, this.courseManager, this.dbConnection, recipesCommand);
     }
 
     public void connect() throws SQLException {

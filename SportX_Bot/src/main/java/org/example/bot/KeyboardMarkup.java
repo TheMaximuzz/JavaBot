@@ -27,7 +27,8 @@ public class KeyboardMarkup {
         buttonTextToCommandMap.put("/viewexercises", "/viewexercises");
         buttonTextToCommandMap.put("/login", "/login");
         buttonTextToCommandMap.put("/logout", "/logout");
-        buttonTextToCommandMap.put("/editprofile", "/editprofile"); // Добавьте эту строку
+        buttonTextToCommandMap.put("/editprofile", "/editprofile");
+        buttonTextToCommandMap.put("/recipes", "/recipes");
     }
 
     public static ReplyKeyboardMarkup getMainMenuKeyboard() {

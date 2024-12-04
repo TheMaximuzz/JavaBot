@@ -2,7 +2,10 @@ package org.example.bot;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -20,15 +23,18 @@ public class StateHandler {
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final Map<Long, UserState> userStates = new HashMap<>();
     private final Map<UserState, BiConsumer<Long, String>> stateHandlers = new HashMap<>();
+    private final RecipesCommand recipesCommand;
 
-    public StateHandler(TelegramBot bot, UserProfileManager userProfileManager, SessionManager sessionManager, CourseManager courseManager, DatabaseConnection dbConnection) {
+    public StateHandler(TelegramBot bot, UserProfileManager userProfileManager, SessionManager sessionManager, CourseManager courseManager, DatabaseConnection dbConnection, RecipesCommand recipesCommand) {
         this.bot = bot;
         this.userProfileManager = userProfileManager;
         this.sessionManager = sessionManager;
         this.courseManager = courseManager;
         this.dbConnection = dbConnection;
+        this.recipesCommand = recipesCommand; // Добавьте это
         initializeStateHandlers();
     }
+
 
     private void initializeStateHandlers() {
         stateHandlers.put(UserState.LOGIN_LOGIN, (userId, input) -> {
@@ -226,6 +232,17 @@ public class StateHandler {
                 e.printStackTrace();
             }
         });
+
+        stateHandlers.put(UserState.ENTER_INGREDIENTS, (userId, input) -> {
+            try {
+                // Передача входного текста напрямую в RecipesCommand
+                SendMessage message = recipesCommand.getContent(userId, input);
+                bot.sendMsgWithInlineKeyboard(String.valueOf(userId), message.getText(), (InlineKeyboardMarkup) message.getReplyMarkup());
+            } catch (Exception e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при обработке ингредиентов. Попробуйте позже.");
+                LoggerUtil.logError(userId, "Ошибка в RecipesCommand: " + e.getMessage());
+            }
+        });
     }
 
     public void handleProfileCreationOrLogin(long telegramChatId, String input) {
@@ -252,6 +269,7 @@ public class StateHandler {
     }
 
     public void setUserState(long userId, UserState state) {
+        LoggerUtil.logInfo(userId, "StateHandler.setUserState вызван с состоянием: " + state);
         userStates.put(userId, state);
     }
 

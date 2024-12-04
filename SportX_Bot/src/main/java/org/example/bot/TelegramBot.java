@@ -9,7 +9,6 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
-
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,6 +30,22 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final StringBuilder helpText = new StringBuilder();
 
     private DatabaseManager databaseManager = new DatabaseManager(this);
+    private final RecipesCommand recipesCommand = new RecipesCommand(
+            new SpoonacularAPI(getApiToken()),
+            databaseManager
+    );
+
+    protected static String getApiToken() {
+        String apiToken = "";
+        try (FileInputStream fis = new FileInputStream("config.properties")) {
+            Properties properties = new Properties();
+            properties.load(fis);
+            apiToken = properties.getProperty("apiToken");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return apiToken;
+    }
 
     private final List<String> commandsRequiringAuth = Arrays.asList(
             "/viewprofile",
@@ -46,6 +61,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     public TelegramBot() {
         loadConfig();
         registerDefaultCommands();
+
     }
 
     private void loadConfig() {
@@ -194,6 +210,22 @@ public class TelegramBot extends TelegramLongPollingBot {
                 LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при получении профиля: " + e.getMessage());
             }
         });
+
+        registerCommand("/recipes", "Подобрать рецепты по ингредиентам", (chatId, builder) -> {
+            try {
+                databaseManager.setUserState(Long.parseLong(chatId), UserState.ENTER_INGREDIENTS);
+
+                SendMessage message = recipesCommand.askForIngredients(Long.parseLong(chatId));
+                sendMsgWithInlineKeyboard(chatId, message.getText(), (InlineKeyboardMarkup) message.getReplyMarkup());
+
+                LoggerUtil.logInfo(Long.parseLong(chatId), "Пользователь начал подбор рецептов.");
+            } catch (Exception e) {
+                LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при обработке команды /recipes: " + e.getMessage());
+                sendMsg(chatId, "Произошла ошибка. Попробуйте позже.");
+            }
+        });
+
+
     }
 
     @Override
@@ -212,6 +244,21 @@ public class TelegramBot extends TelegramLongPollingBot {
             Message message = update.getMessage();
             String text = message.getText();
             long userId = message.getChatId();
+
+
+            UserState state = databaseManager.getUserState(userId);
+            if (state == UserState.ENTER_INGREDIENTS) {
+                try {
+                    SendMessage response = recipesCommand.getContent(userId, text);
+                    sendMsgWithInlineKeyboard(String.valueOf(userId), response.getText(), (InlineKeyboardMarkup) response.getReplyMarkup());
+                    databaseManager.removeUserState(userId); // Удаляем состояние после обработки
+                } catch (Exception e) {
+                    sendMsg(String.valueOf(userId), "Ошибка при обработке ингредиентов. Попробуйте позже.");
+                    LoggerUtil.logError(userId, "Ошибка при обработке ингредиентов: " + e.getMessage());
+                }
+                return;
+            }
+
             String command = KeyboardMarkup.mapButtonTextToCommand(text);
 
             LoggerUtil.logInfo(userId, "Пользователь отправил команду: " + command);
@@ -278,6 +325,21 @@ public class TelegramBot extends TelegramLongPollingBot {
                     sendMsg(String.valueOf(userId), "Ошибка при получении упражнений. Попробуйте позже.");
                     LoggerUtil.logError(userId, "Ошибка при получении упражнений: " + e.getMessage());
                 }
+            } else if (callbackData.startsWith("recipe_")) {
+                try {
+                    // Извлекаем ID рецепта из callbackData
+                    int recipeId = Integer.parseInt(callbackData.split("_")[1]);
+
+                    // Получаем детали рецепта
+                    String recipeDetails = recipesCommand.getRecipeDetails(recipeId);
+
+                    // Отправляем пользователю детали рецепта
+                    sendMsg(String.valueOf(userId), recipeDetails);
+                    LoggerUtil.logInfo(userId, "Пользователь запросил рецепт: " + recipeId);
+                } catch (Exception e) {
+                    sendMsg(String.valueOf(userId), "Ошибка при получении рецепта. Попробуйте позже.");
+                    LoggerUtil.logError(userId, "Ошибка при получении рецепта: " + e.getMessage());
+                }
             } else if (callbackData.startsWith("complete_")) {
                 try {
                     int workoutId = Integer.parseInt(callbackData.split("_")[1]);
@@ -330,13 +392,11 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-
-    // Метод для отправки сообщений
     public void sendMsg(String chatId, String text) {
         SendMessage message = new SendMessage();
         message.setChatId(chatId);
         message.setText(text);
-        message.setParseMode(ParseMode.HTML); // Используем HTML для разметки
+        message.setParseMode(ParseMode.HTML);
         try {
             execute(message);
         } catch (TelegramApiException e) {
@@ -357,12 +417,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    // возвращает карту commandMap, которая содержит команды и связанные с ними действия.
     public Map<String, BiConsumer<String, StringBuilder>> getCommandMap() {
         return commandMap;
     }
 
-    // Метод для установки DatabaseManager
     public void setDatabaseManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
     }
