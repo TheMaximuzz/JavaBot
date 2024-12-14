@@ -1,5 +1,6 @@
 package org.example.recipes;
 
+import okhttp3.OkHttpClient;
 import org.example.bot.DatabaseManager;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -12,6 +13,7 @@ import java.util.logging.Logger;
 
 public class RecipesCommand {
 
+    private TranslateService translateService;
     private final SpoonacularAPI spoonacularAPI;
     private final DatabaseManager databaseManager;
     private final RecipeParser recipeParser; // Новый класс
@@ -21,7 +23,9 @@ public class RecipesCommand {
     public RecipesCommand(SpoonacularAPI api, DatabaseManager dbManager) {
         this.spoonacularAPI = api;
         this.databaseManager = dbManager;
-        this.recipeParser = new RecipeParser(); // Инициализация
+        this.recipeParser = new RecipeParser();
+        OkHttpClient okHttpClient = new OkHttpClient();
+        this.translateService = new TranslateService(okHttpClient);
     }
 
     public SendMessage getContent(long userId, String userInput) {
@@ -54,15 +58,15 @@ public class RecipesCommand {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         try {
-            String response = spoonacularAPI.searchRecipes(ingredientsInput, "", "");
+            String response = spoonacularAPI.searchRecipes(translateService.translateToEnglish(ingredientsInput), "", "");
 
-            List<String> recipeTitles = recipeParser.parseRecipeTitles(response); // Использование RecipeParser
+            List<String> recipeTitles = recipeParser.parseRecipeTitles(response);
             List<Integer> recipeIds = recipeParser.parseRecipeIds(response);
 
             if (recipeTitles.isEmpty()) {
                 message.setText("К сожалению, рецепты не найдены. Попробуйте уточнить ингредиенты.");
             } else {
-                message.setText("Рецепты, которые могут вам подойти:\n" + String.join("\n", recipeTitles));
+                message.setText("Рецепты, которые могут вам подойти:\n" + translateService.translateFromEnglish(String.join("\n ", recipeTitles)));
                 message.setReplyMarkup(createRecipeSelectionKeyboard(recipeTitles, recipeIds));
             }
         } catch (Exception e) {
@@ -78,7 +82,7 @@ public class RecipesCommand {
 
         for (int i = 0; i < recipeTitles.size(); i++) {
             InlineKeyboardButton button = new InlineKeyboardButton();
-            button.setText(recipeTitles.get(i));
+            button.setText(translateService.translateFromEnglish(recipeTitles.get(i)));
             button.setCallbackData("recipe_" + recipeIds.get(i));
             rows.add(List.of(button));
         }
@@ -89,7 +93,7 @@ public class RecipesCommand {
     public String getRecipeDetails(int recipeId) {
         try {
             String response = spoonacularAPI.getRecipeInformation(recipeId);
-            return recipeParser.getRecipeDetails(response); // используется RecipeParser
+            return recipeParser.getRecipeDetails(response);
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Ошибка при получении деталей рецепта", e);
             return "Произошла ошибка при получении деталей рецепта. Попробуйте позже.";
