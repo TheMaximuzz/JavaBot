@@ -24,11 +24,6 @@ public class TranslateService {
         Request request = new Request.Builder().url(url).build();
 
         try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                LOGGER.error("Unexpected code {}", response);
-                return "";
-            }
-
             assert response.body() != null;
             return parseResponse(response.body().string());
         } catch (IOException e) {
@@ -44,11 +39,6 @@ public class TranslateService {
         Request request = new Request.Builder().url(url).build();
 
         try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                LOGGER.error("Unexpected code {}", response);
-                return "";
-            }
-
             assert response.body() != null;
             return parseResponse(response.body().string());
         } catch (IOException e) {
