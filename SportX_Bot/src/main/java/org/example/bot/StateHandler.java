@@ -23,17 +23,18 @@ public class StateHandler {
     private final Map<Long, UserState> userStates = new HashMap<>();
     private final Map<UserState, BiConsumer<Long, String>> stateHandlers = new HashMap<>();
     private final RecipesCommand recipesCommand;
+    private final ReminderManager reminderManager;
 
-    public StateHandler(TelegramBot bot, UserProfileManager userProfileManager, SessionManager sessionManager, CourseManager courseManager, DatabaseConnection dbConnection, RecipesCommand recipesCommand) {
+    public StateHandler(TelegramBot bot, UserProfileManager userProfileManager, SessionManager sessionManager, CourseManager courseManager, DatabaseConnection dbConnection, RecipesCommand recipesCommand, ReminderManager reminderManager) {
         this.bot = bot;
         this.userProfileManager = userProfileManager;
         this.sessionManager = sessionManager;
         this.courseManager = courseManager;
         this.dbConnection = dbConnection;
-        this.recipesCommand = recipesCommand; // Добавьте это
+        this.recipesCommand = recipesCommand;
+        this.reminderManager = reminderManager;
         initializeStateHandlers();
     }
-
 
     private void initializeStateHandlers() {
         stateHandlers.put(UserState.LOGIN_LOGIN, (userId, input) -> {
@@ -240,6 +241,40 @@ public class StateHandler {
             } catch (Exception e) {
                 bot.sendMsg(String.valueOf(userId), "Ошибка при обработке ингредиентов. Попробуйте позже.");
                 LoggerUtil.logError(userId, "Ошибка в RecipesCommand: " + e.getMessage());
+            }
+        });
+
+        stateHandlers.put(UserState.ADD_REMINDER, (userId, input) -> {
+            try {
+                String[] parts = input.split(" ", 2);
+                if (parts.length == 2) {
+                    String description = parts[0];
+                    String dateTime = parts[1];
+                    reminderManager.addReminder(userId, description, dateTime);
+                    bot.sendMsg(String.valueOf(userId), "Напоминание добавлено успешно!");
+                } else {
+                    bot.sendMsg(String.valueOf(userId), "Неверный формат. Используйте: описание дата/время");
+                }
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при добавлении напоминания. Попробуйте позже.");
+                e.printStackTrace();
+            } finally {
+                userStates.remove(userId);
+            }
+        });
+
+        stateHandlers.put(UserState.DELETE_REMINDER, (userId, input) -> {
+            try {
+                int reminderId = Integer.parseInt(input);
+                reminderManager.deleteReminder(reminderId);
+                bot.sendMsg(String.valueOf(userId), "Напоминание удалено успешно!");
+            } catch (NumberFormatException e) {
+                bot.sendMsg(String.valueOf(userId), "Неверный формат ID напоминания.");
+            } catch (SQLException e) {
+                bot.sendMsg(String.valueOf(userId), "Ошибка при удалении напоминания. Попробуйте позже.");
+                e.printStackTrace();
+            } finally {
+                userStates.remove(userId);
             }
         });
     }

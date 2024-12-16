@@ -9,6 +9,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+import java.io.FileNotFoundException;
 
 public class DatabaseConnection {
 
@@ -21,9 +22,12 @@ public class DatabaseConnection {
         loadDbConfig();
     }
 
-    private void loadDbConfig() {
+    public void loadDbConfig() {
         Properties properties = new Properties();
-        try (InputStream input = new FileInputStream("db_config.properties")) {
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream("db_config.properties")) {
+            if (input == null) {
+                throw new FileNotFoundException("db_config.properties not found");
+            }
             properties.load(input);
             this.url = properties.getProperty("db.url");
             this.username = properties.getProperty("db.username");

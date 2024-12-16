@@ -29,6 +29,9 @@ public class KeyboardMarkup {
         buttonTextToCommandMap.put("/logout", "/logout");
         buttonTextToCommandMap.put("/editprofile", "/editprofile");
         buttonTextToCommandMap.put("/recipes", "/recipes");
+        buttonTextToCommandMap.put("/addreminder", "/addreminder");
+        buttonTextToCommandMap.put("/deletereminder", "/deletereminder");
+        buttonTextToCommandMap.put("/viewreminders", "/viewreminders");
     }
 
     public static ReplyKeyboardMarkup getMainMenuKeyboard() {

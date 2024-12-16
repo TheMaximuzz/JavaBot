@@ -10,15 +10,22 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
+
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.BiConsumer;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+
 
 import java.sql.SQLException;
 
@@ -30,11 +37,19 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final Map<String, BiConsumer<String, StringBuilder>> commandMap = new HashMap<>();
     private final StringBuilder helpText = new StringBuilder();
 
-    private DatabaseManager databaseManager = new DatabaseManager(this);
-    private final RecipesCommand recipesCommand = new RecipesCommand(
-            new SpoonacularAPI(getApiToken()),
-            databaseManager
-    );
+    private DatabaseManager databaseManager;
+    private final RecipesCommand recipesCommand;
+    private final ReminderManager reminderManager;
+
+    private final Map<Long, UserState> userStates = new HashMap<>();
+
+    public void setUserState(long userId, UserState state) {
+        userStates.put(userId, state);
+    }
+
+    public UserState getUserState(long userId) {
+        return userStates.get(userId);
+    }
 
     protected static String getApiToken() {
         String apiToken = "";
@@ -56,13 +71,21 @@ public class TelegramBot extends TelegramLongPollingBot {
             "/viewworkouts",
             "/viewexercises",
             "/logout",
-            "/editprofile"
+            "/editprofile",
+            "/deletereminder",
+            "/viewreminders",
+            "/addreminder"
     );
 
     public TelegramBot() {
         loadConfig();
         registerDefaultCommands();
-
+        this.reminderManager = new ReminderManager(new DatabaseConnection());
+        this.databaseManager = new DatabaseManager(this, this.reminderManager);
+        this.recipesCommand = new RecipesCommand(
+                new SpoonacularAPI(getApiToken()),
+                databaseManager
+        );
     }
 
     private void loadConfig() {
@@ -72,7 +95,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             this.botToken = properties.getProperty("bot.token");
             this.botUsername = properties.getProperty("bot.username");
         } catch (IOException e) {
-            LoggerUtil.logError(0, "Ошибка при загрузке конфигурации: " + e.getMessage()); // Передаем 0, т.к. userId неизвестен
+            LoggerUtil.logError(0, "Ошибка при загрузке конфигурации: " + e.getMessage());
         }
     }
 
@@ -226,7 +249,31 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         });
 
+        registerCommand("/addreminder", "Добавить напоминание", (chatId, builder) -> {
+            builder.append("Пожалуйста, введите описание напоминания и дату/время в формате DD-MM-YYYY HH:MM");
+            databaseManager.setUserState(Long.parseLong(chatId), UserState.ADD_REMINDER);
+        });
 
+        registerCommand("/viewreminders", "Посмотреть напоминания", (chatId, builder) -> {
+            try {
+                List<String> reminders = reminderManager.getReminders(Long.parseLong(chatId));
+                if (reminders.isEmpty()) {
+                    builder.append("У вас нет напоминаний.");
+                } else {
+                    for (String reminder : reminders) {
+                        builder.append(reminder).append("\n");
+                    }
+                }
+            } catch (SQLException e) {
+                builder.append("Ошибка при получении напоминаний. Попробуйте позже.");
+                LoggerUtil.logError(Long.parseLong(chatId), "Ошибка при получении напоминаний: " + e.getMessage());
+            }
+        });
+
+        registerCommand("/deletereminder", "Удалить напоминание", (chatId, builder) -> {
+            builder.append("Пожалуйста, введите ID напоминания, которое хотите удалить.");
+            databaseManager.setUserState(Long.parseLong(chatId), UserState.DELETE_REMINDER);
+        });
     }
 
     @Override
@@ -246,16 +293,48 @@ public class TelegramBot extends TelegramLongPollingBot {
             String text = message.getText();
             long userId = message.getChatId();
 
-
             UserState state = databaseManager.getUserState(userId);
-            if (state == UserState.ENTER_INGREDIENTS) {
+            if (state == UserState.ADD_REMINDER) {
                 try {
-                    SendMessage response = recipesCommand.getContent(userId, text);
-                    sendMsgWithInlineKeyboard(String.valueOf(userId), response.getText(), (InlineKeyboardMarkup) response.getReplyMarkup());
-                    databaseManager.removeUserState(userId); // Удаляем состояние после обработки
-                } catch (Exception e) {
-                    sendMsg(String.valueOf(userId), "Ошибка при обработке ингредиентов. Попробуйте позже.");
-                    LoggerUtil.logError(userId, "Ошибка при обработке ингредиентов: " + e.getMessage());
+                    // Regular expression to match the date and time format DD-MM-YYYY HH:MM
+                    String dateTimePattern = "\\b(\\d{2}-\\d{2}-\\d{4} \\d{2}:\\d{2})\\b";
+                    Pattern pattern = Pattern.compile(dateTimePattern);
+                    Matcher matcher = pattern.matcher(text);
+
+                    if (matcher.find()) {
+                        String dateTime = matcher.group(1);
+                        String description = text.replace(dateTime, "").trim();
+
+                        // Parse the date and time
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy HH:mm");
+                        Date parsedDate = dateFormat.parse(dateTime);
+                        SimpleDateFormat dbDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                        String formattedDateTime = dbDateFormat.format(parsedDate);
+
+                        reminderManager.addReminder(userId, description, formattedDateTime);
+                        sendMsg(String.valueOf(userId), "Напоминание добавлено успешно!");
+                    } else {
+                        sendMsg(String.valueOf(userId), "Неверный формат. Используйте: описание дата/время");
+                    }
+                } catch (ParseException | SQLException e) {
+                    sendMsg(String.valueOf(userId), "Ошибка при добавлении напоминания. Попробуйте позже.");
+                    LoggerUtil.logError(userId, "Ошибка при добавлении напоминания: " + e.getMessage());
+                } finally {
+                    databaseManager.removeUserState(userId);
+                }
+                return;
+            } else if (state == UserState.DELETE_REMINDER) {
+                try {
+                    int reminderId = Integer.parseInt(text);
+                    reminderManager.deleteReminder(reminderId);
+                    sendMsg(String.valueOf(userId), "Напоминание удалено успешно!");
+                } catch (NumberFormatException e) {
+                    sendMsg(String.valueOf(userId), "Неверный формат ID напоминания.");
+                } catch (SQLException e) {
+                    sendMsg(String.valueOf(userId), "Ошибка при удалении напоминания. Попробуйте позже.");
+                    LoggerUtil.logError(userId, "Ошибка при удалении напоминания: " + e.getMessage());
+                } finally {
+                    databaseManager.removeUserState(userId);
                 }
                 return;
             }
@@ -354,6 +433,8 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         }
     }
+
+
 
     private void handleCommand(long userId, String command, String text) {
         UserState userState = databaseManager.getUserState(userId);

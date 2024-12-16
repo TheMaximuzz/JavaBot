@@ -14,8 +14,9 @@ public class DatabaseManager {
     private final SessionManager sessionManager;
     private final StateHandler stateHandler;
     private final TelegramBot bot;
+    private final ReminderManager reminderManager;
 
-    public DatabaseManager(TelegramBot bot) {
+    public DatabaseManager(TelegramBot bot, ReminderManager reminderManager) {
         this.bot = bot;
         this.dbConnection = new DatabaseConnection();
         this.userProfileManager = new UserProfileManager(this.dbConnection);
@@ -23,7 +24,8 @@ public class DatabaseManager {
         this.sessionManager = new SessionManager(this.dbConnection);
         SpoonacularAPI spoonacularAPI = new SpoonacularAPI(TelegramBot.getApiToken());
         RecipesCommand recipesCommand = new RecipesCommand(spoonacularAPI, this);
-        this.stateHandler = new StateHandler(this.bot, this.userProfileManager, this.sessionManager, this.courseManager, this.dbConnection, recipesCommand);
+        this.reminderManager = reminderManager;
+        this.stateHandler = new StateHandler(this.bot, this.userProfileManager, this.sessionManager, this.courseManager, this.dbConnection, recipesCommand, this.reminderManager);
     }
 
     public void connect() throws SQLException {
